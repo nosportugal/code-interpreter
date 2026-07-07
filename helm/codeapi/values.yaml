@@ -458,6 +458,32 @@ redis:
   #   port: 6379
   #   password: secret
 
+  # Redis Cluster mode (e.g. GCP Memorystore cluster, AWS ElastiCache cluster).
+  # When enabled the service components connect using ioredis Cluster mode.
+  cluster:
+    enabled: false
+    # Comma-separated list of "host:port" startup nodes for ioredis Cluster
+    # discovery.  Populate this when redis.enabled=false and the external Redis
+    # is a cluster endpoint.  Example:
+    #   nodes: "node1.example.com:6379,node2.example.com:6379,node3.example.com:6379"
+    nodes: ""
+
+  # TLS settings for external managed Redis (e.g. GCP Memorystore with TLS).
+  # Ignored when redis.enabled=true (in-cluster Redis uses plain TCP).
+  tls:
+    enabled: false
+    # Name of a Kubernetes Secret that holds the CA certificate.
+    # The Secret must contain the key specified in caKey.
+    caSecretName: ""
+    caKey: "ca"
+    # Mount path inside each pod for the CA certificate file.
+    caMountPath: "/etc/redis-tls/ca.crt"
+
+  # Alternative DNS lookup - set to true for GCP Memorystore cluster or
+  # AWS ElastiCache clusters where standard DNS resolution causes TLS
+  # hostname-mismatch errors.  Mirrors REDIS_USE_ALTERNATIVE_DNS_LOOKUP.
+  useAlternativeDnsLookup: false
+
 # =============================================================================
 # MINIO (S3-compatible storage)
 # =============================================================================

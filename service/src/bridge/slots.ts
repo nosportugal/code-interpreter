@@ -1,4 +1,4 @@
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis-connection';
 import { durableAdmissionFence } from './admission';
 
 /** Hard bound keeps every atomic scheduling scan constant-sized. */
@@ -15,7 +15,7 @@ export const MAX_WORKSPACE_LEASE_SLOTS = 8;
  * `git worktree add` cannot be starved by a steady stream of lane work.
  */
 export class BridgeWorkspaceSlots {
-  constructor(private readonly redis: Redis) {}
+  constructor(private readonly redis: RedisClient) {}
 
   private keys(workerId: string): string[] {
     const prefix = `codeapi:bridge:v1:worker:${encodeURIComponent(workerId)}`;
