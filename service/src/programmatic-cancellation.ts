@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type IORedis from 'ioredis';
+import type { RedisClient } from './redis-connection';
 import type { AuthenticatedRequest } from './types';
 import { getCredentialId } from './auth/principal';
 import { getExecutionIdentity } from './execution-identity';
@@ -101,7 +101,7 @@ return 0
 `;
 
 export async function reserveProgrammaticCancellation(args: {
-  redis: IORedis;
+  redis: RedisClient;
   requestId: string;
   owner: string;
   ttlSeconds: number;
@@ -121,7 +121,7 @@ export async function reserveProgrammaticCancellation(args: {
 }
 
 export async function attachProgrammaticCancellationTarget(args: {
-  redis: IORedis;
+  redis: RedisClient;
   requestId: string;
   owner: string;
   target: CancellationTarget;
@@ -143,7 +143,7 @@ export async function attachProgrammaticCancellationTarget(args: {
 }
 
 export async function cancelProgrammaticRequest(args: {
-  redis: IORedis;
+  redis: RedisClient;
   requestId: string;
   owner: string;
   ttlSeconds: number;
@@ -167,7 +167,7 @@ export async function cancelProgrammaticRequest(args: {
 }
 
 export async function releaseProgrammaticCancellation(args: {
-  redis: IORedis;
+  redis: RedisClient;
   requestId: string;
   owner: string;
 }): Promise<void> {
