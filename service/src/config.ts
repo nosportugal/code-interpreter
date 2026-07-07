@@ -392,6 +392,8 @@ export const env = {
   EXECUTION_MANIFEST_MAX_UPLOAD_BYTES: Number(process.env.EXECUTION_MANIFEST_MAX_UPLOAD_BYTES) || defaultMaxFileSize,
   EXECUTION_MANIFEST_MAX_OUTPUT_FILES: Number(process.env.EXECUTION_MANIFEST_MAX_OUTPUT_FILES) || 50,
   EXECUTION_MANIFEST_MAX_REQUESTS: Number(process.env.EXECUTION_MANIFEST_MAX_REQUESTS) || 1000,
+  // Redis - Cluster mode (GCP Memorystore cluster, AWS ElastiCache cluster, etc.)
+  USE_REDIS_CLUSTER: process.env.USE_REDIS_CLUSTER === 'true',
   // Redis - Alternative DNS Lookup for AWS ElastiCache TLS connections
   REDIS_USE_ALTERNATIVE_DNS_LOOKUP: process.env.REDIS_USE_ALTERNATIVE_DNS_LOOKUP === 'true',
   /**
