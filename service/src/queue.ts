@@ -17,6 +17,7 @@ import type {
   SandboxBackendName,
 } from './execution-profile';
 import logger from './logger';
+import { bullmqPrefix } from './redis-connection';
 import { redisKeepAliveOptions } from './redis-options';
 import { bullmqQueueJobs, registerBullmqQueueMetricsCollector } from './metrics';
 
@@ -80,6 +81,7 @@ const queueResources = new Map<
   string,
   { queue: Queue<t.JobData, t.JobResult, Jobs.execute>; events: QueueEvents }
 >();
+const prefix = bullmqPrefix();
 
 function getQueueResources(
   name: string,
@@ -87,8 +89,11 @@ function getQueueResources(
   const existing = queueResources.get(name);
   if (existing != null) return existing;
 
-  const queue = new Queue<t.JobData, t.JobResult, Jobs.execute>(name, { connection });
-  const events = new QueueEvents(name, { connection });
+  const queue = new Queue<t.JobData, t.JobResult, Jobs.execute>(name, {
+    connection,
+    prefix,
+  });
+  const events = new QueueEvents(name, { connection, prefix });
   setMaxListeners(0, queue, events);
   const resources = { queue, events };
   queueResources.set(name, resources);
