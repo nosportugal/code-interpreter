@@ -8,49 +8,76 @@ import {
   resolveExecutionProfileSource,
 } from './execution-profile';
 
-export const languageConfig: Record<Languages | string, t.LanguageConfig | undefined> = {
-  [Languages.bash]: { language: 'bash', version: '5.2.0', fileName: 'script.sh' },
-  [Languages.js]: { language: 'bun-js', version: '1.3.14', fileName: 'index.js' },
-  [Languages.node]: { language: 'node', version: '24.15.0', fileName: 'index.js' },
-  [Languages.py]: { language: 'python', version: '3.14.4', fileName: 'main.py' },
-  [Languages.ts]: { language: 'bun-ts', version: '1.3.14', fileName: 'main.ts' },
+export const languageConfig: Record<
+    Languages | string,
+    t.LanguageConfig | undefined
+> = {
+    [Languages.bash]: {
+        language: 'bash',
+        version: '5.2.0',
+        fileName: 'script.sh',
+    },
+    [Languages.js]: {
+        language: 'bun-js',
+        version: '1.3.14',
+        fileName: 'index.js',
+    },
+    [Languages.node]: {
+        language: 'node',
+        version: '24.15.0',
+        fileName: 'index.js',
+    },
+    [Languages.py]: {
+        language: 'python',
+        version: '3.14.4',
+        fileName: 'main.py',
+    },
+    [Languages.ts]: {
+        language: 'bun-ts',
+        version: '1.3.14',
+        fileName: 'main.ts',
+    },
 };
 
 const languageAliases: Record<string, Languages> = {
-  // Python
-  python: Languages.py,
-  py: Languages.py,
+    // Python
+    python: Languages.py,
+    py: Languages.py,
 
-  // JavaScript (Bun)
-  javascript: Languages.js,
-  js: Languages.js,
-  'bun-js': Languages.js,
-  bun: Languages.js,
+    // JavaScript (Bun)
+    javascript: Languages.js,
+    js: Languages.js,
+    'bun-js': Languages.js,
+    bun: Languages.js,
 
-  // JavaScript (Node.js)
-  node: Languages.node,
-  nodejs: Languages.node,
-  'node-js': Languages.node,
-  'node-javascript': Languages.node,
+    // JavaScript (Node.js)
+    node: Languages.node,
+    nodejs: Languages.node,
+    'node-js': Languages.node,
+    'node-javascript': Languages.node,
 
-  // TypeScript (Bun)
-  typescript: Languages.ts,
-  ts: Languages.ts,
-  'bun-ts': Languages.ts,
-  'bun-typescript': Languages.ts,
+    // TypeScript (Bun)
+    typescript: Languages.ts,
+    ts: Languages.ts,
+    'bun-ts': Languages.ts,
+    'bun-typescript': Languages.ts,
 
-  // Bash
-  bash: Languages.bash,
-  sh: Languages.bash,
+    // Bash
+    bash: Languages.bash,
+    sh: Languages.bash,
 };
 
 export function resolveLanguage(lang: string): Languages | undefined {
-  return languageAliases[lang.toLowerCase()];
+    return languageAliases[lang.toLowerCase()];
 }
 
 const defaultJobTimeoutMs = Number(process.env.JOB_TIMEOUT) || 300000;
-const defaultMaxFileSize = Number(process.env.MAX_FILE_SIZE) || 25 * 1024 * 1024;
-const defaultExecutionManifestTtlSeconds = Math.min(Math.ceil((defaultJobTimeoutMs + 60000) / 1000), 600);
+const defaultMaxFileSize =
+    Number(process.env.MAX_FILE_SIZE) || 25 * 1024 * 1024;
+const defaultExecutionManifestTtlSeconds = Math.min(
+    Math.ceil((defaultJobTimeoutMs + 60000) / 1000),
+    600,
+);
 const EGRESS_GRANT_GRACE_MS = 10 * 60 * 1000;
 /** Object-store listing and marker writes are metadata operations, not
  * checkpoint transfers. Bound each tightly so the post-exec checkpoint
@@ -74,31 +101,33 @@ const POST_EXEC_CHECKPOINT_REGISTRY_COMMANDS = 6;
  * The two large transfers receive the configured transfer timeout; the two
  * metadata operations receive the smaller metadata cap. */
 export function checkpointPipelineBudgetMs(
-  launchTimeoutMs: number,
-  checkpointTimeoutMs: number,
+    launchTimeoutMs: number,
+    checkpointTimeoutMs: number,
 ): number {
-  const metadataTimeoutMs = Math.min(
-    checkpointTimeoutMs,
-    CHECKPOINT_METADATA_TIMEOUT_CAP_MS,
-  );
-  return launchTimeoutMs
-    + 2 * checkpointTimeoutMs
-    + 2 * metadataTimeoutMs
-    + POST_EXEC_CHECKPOINT_REGISTRY_COMMANDS
-      * RUNTIME_SESSION_REDIS_COMMAND_TIMEOUT_MS;
+    const metadataTimeoutMs = Math.min(
+        checkpointTimeoutMs,
+        CHECKPOINT_METADATA_TIMEOUT_CAP_MS,
+    );
+    return (
+        launchTimeoutMs +
+        2 * checkpointTimeoutMs +
+        2 * metadataTimeoutMs +
+        POST_EXEC_CHECKPOINT_REGISTRY_COMMANDS *
+            RUNTIME_SESSION_REDIS_COMMAND_TIMEOUT_MS
+    );
 }
 
 /** BullMQ's `timestamp` is the enqueue time. Anchor the worker deadline to it
  * so queueing consumes the same caller-visible JOB_TIMEOUT budget instead of
  * granting a second full timeout after a delayed job finally starts. */
 export function jobDeadlineAtMs(
-  enqueuedAtMs: number | undefined,
-  timeoutMs: number,
-  nowMs: number = Date.now(),
+    enqueuedAtMs: number | undefined,
+    timeoutMs: number,
+    nowMs: number = Date.now(),
 ): number {
-  return Number.isFinite(enqueuedAtMs) && (enqueuedAtMs as number) > 0
-    ? (enqueuedAtMs as number) + timeoutMs
-    : nowMs + timeoutMs;
+    return Number.isFinite(enqueuedAtMs) && (enqueuedAtMs as number) > 0
+        ? (enqueuedAtMs as number) + timeoutMs
+        : nowMs + timeoutMs;
 }
 
 /** The worker stops user work at JOB_TIMEOUT, then may still need to terminate
@@ -108,159 +137,189 @@ export function jobDeadlineAtMs(
 export const WORKER_COMPLETION_OVERHEAD_MS = 5_000;
 
 export function jobCompletionWaitTimeoutMs(
-  jobTimeoutMs: number,
-  backendCleanupTimeoutMs: number,
-  egressRevokeTimeoutMs: number,
+    jobTimeoutMs: number,
+    backendCleanupTimeoutMs: number,
+    egressRevokeTimeoutMs: number,
 ): number {
-  return jobTimeoutMs
-    + backendCleanupTimeoutMs
-    + egressRevokeTimeoutMs
-    + WORKER_COMPLETION_OVERHEAD_MS;
+    return (
+        jobTimeoutMs +
+        backendCleanupTimeoutMs +
+        egressRevokeTimeoutMs +
+        WORKER_COMPLETION_OVERHEAD_MS
+    );
 }
 
 export function parseArnList(raw: string | undefined): string[] | undefined {
-  if (raw == null) return undefined;
-  const entries = raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
-  return entries.length > 0 ? entries : undefined;
+    if (raw == null) return undefined;
+    const entries = raw
+        .split(',')
+        .map(entry => entry.trim())
+        .filter(entry => entry.length > 0);
+    return entries.length > 0 ? entries : undefined;
 }
 
 export interface LambdaMicrovmNumericConfig {
-  LAMBDA_MICROVM_PORT: number;
-  LAMBDA_MICROVM_MAX_DURATION_SECONDS: number;
-  LAMBDA_MICROVM_IDLE_SECONDS: number;
-  LAMBDA_MICROVM_SUSPEND_SECONDS: number;
-  LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: number;
-  LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: number;
-  LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: number;
-  LAMBDA_MICROVM_LAUNCH_TPS: number;
-  LAMBDA_MICROVM_TOKEN_TPS: number;
+    LAMBDA_MICROVM_PORT: number;
+    LAMBDA_MICROVM_MAX_DURATION_SECONDS: number;
+    LAMBDA_MICROVM_IDLE_SECONDS: number;
+    LAMBDA_MICROVM_SUSPEND_SECONDS: number;
+    LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: number;
+    LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: number;
+    LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: number;
+    LAMBDA_MICROVM_LAUNCH_TPS: number;
+    LAMBDA_MICROVM_TOKEN_TPS: number;
 }
 
 type LambdaMicrovmNumericEnv = Record<string, string | undefined>;
 
 interface IntegerRange {
-  min: number;
-  max?: number;
+    min: number;
+    max?: number;
 }
 
-const lambdaMicrovmNumericRanges: Record<keyof LambdaMicrovmNumericConfig, IntegerRange> = {
-  LAMBDA_MICROVM_PORT: { min: 1, max: 65_535 },
-  LAMBDA_MICROVM_MAX_DURATION_SECONDS: { min: 1, max: 28_800 },
-  LAMBDA_MICROVM_IDLE_SECONDS: { min: 60, max: 28_800 },
-  LAMBDA_MICROVM_SUSPEND_SECONDS: { min: 0, max: 28_800 },
-  /* Keep proxy credentials shorter than the AWS 60-minute maximum. */
-  LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: { min: 1, max: 900 },
-  LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: { min: 1 },
-  LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: { min: 1 },
-  LAMBDA_MICROVM_LAUNCH_TPS: { min: 1 },
-  LAMBDA_MICROVM_TOKEN_TPS: { min: 1 },
+const lambdaMicrovmNumericRanges: Record<
+    keyof LambdaMicrovmNumericConfig,
+    IntegerRange
+> = {
+    LAMBDA_MICROVM_PORT: { min: 1, max: 65_535 },
+    LAMBDA_MICROVM_MAX_DURATION_SECONDS: { min: 1, max: 28_800 },
+    LAMBDA_MICROVM_IDLE_SECONDS: { min: 60, max: 28_800 },
+    LAMBDA_MICROVM_SUSPEND_SECONDS: { min: 0, max: 28_800 },
+    /* Keep proxy credentials shorter than the AWS 60-minute maximum. */
+    LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: { min: 1, max: 900 },
+    LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: { min: 1 },
+    LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: { min: 1 },
+    LAMBDA_MICROVM_LAUNCH_TPS: { min: 1 },
+    LAMBDA_MICROVM_TOKEN_TPS: { min: 1 },
 };
 
 const lambdaMicrovmNumericDefaults: LambdaMicrovmNumericConfig = {
-  LAMBDA_MICROVM_PORT: 8080,
-  LAMBDA_MICROVM_MAX_DURATION_SECONDS: 28_800,
-  /* 30min keeps a session's VM fully RUNNING (RAM + page cache live, ~0.3s
-   * follow-ups) across a realistic conversation gap before it suspends;
-   * 5min proved too aggressive — heavy libraries (chdb ~400MB) pay a
-   * 30-120s lazy rootfs re-read whenever the cache is lost. */
-  LAMBDA_MICROVM_IDLE_SECONDS: 1_800,
-  LAMBDA_MICROVM_SUSPEND_SECONDS: 1_800,
-  LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: 300,
-  LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: 60_000,
-  LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: 5_000,
-  LAMBDA_MICROVM_LAUNCH_TPS: 4,
-  LAMBDA_MICROVM_TOKEN_TPS: 8,
+    LAMBDA_MICROVM_PORT: 8080,
+    LAMBDA_MICROVM_MAX_DURATION_SECONDS: 28_800,
+    /* 30min keeps a session's VM fully RUNNING (RAM + page cache live, ~0.3s
+     * follow-ups) across a realistic conversation gap before it suspends;
+     * 5min proved too aggressive — heavy libraries (chdb ~400MB) pay a
+     * 30-120s lazy rootfs re-read whenever the cache is lost. */
+    LAMBDA_MICROVM_IDLE_SECONDS: 1_800,
+    LAMBDA_MICROVM_SUSPEND_SECONDS: 1_800,
+    LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: 300,
+    LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: 60_000,
+    LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: 5_000,
+    LAMBDA_MICROVM_LAUNCH_TPS: 4,
+    LAMBDA_MICROVM_TOKEN_TPS: 8,
 };
 
 /** Parse configured values without `||` so an intentional zero survives long
  * enough for the range validator to accept it where AWS does (suspend duration)
  * and reject it everywhere else. */
 export function resolveLambdaMicrovmNumericConfig(
-  source: LambdaMicrovmNumericEnv,
+    source: LambdaMicrovmNumericEnv,
 ): LambdaMicrovmNumericConfig {
-  const read = (name: keyof LambdaMicrovmNumericConfig): number => {
-    const raw = source[name];
-    return raw == null || raw.trim() === '' ? lambdaMicrovmNumericDefaults[name] : Number(raw);
-  };
-  return {
-    LAMBDA_MICROVM_PORT: read('LAMBDA_MICROVM_PORT'),
-    LAMBDA_MICROVM_MAX_DURATION_SECONDS: read('LAMBDA_MICROVM_MAX_DURATION_SECONDS'),
-    LAMBDA_MICROVM_IDLE_SECONDS: read('LAMBDA_MICROVM_IDLE_SECONDS'),
-    LAMBDA_MICROVM_SUSPEND_SECONDS: read('LAMBDA_MICROVM_SUSPEND_SECONDS'),
-    LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: read('LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS'),
-    LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: read('LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS'),
-    LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: read('LAMBDA_MICROVM_HEALTH_TIMEOUT_MS'),
-    LAMBDA_MICROVM_LAUNCH_TPS: read('LAMBDA_MICROVM_LAUNCH_TPS'),
-    LAMBDA_MICROVM_TOKEN_TPS: read('LAMBDA_MICROVM_TOKEN_TPS'),
-  };
+    const read = (name: keyof LambdaMicrovmNumericConfig): number => {
+        const raw = source[name];
+        return raw == null || raw.trim() === ''
+            ? lambdaMicrovmNumericDefaults[name]
+            : Number(raw);
+    };
+    return {
+        LAMBDA_MICROVM_PORT: read('LAMBDA_MICROVM_PORT'),
+        LAMBDA_MICROVM_MAX_DURATION_SECONDS: read(
+            'LAMBDA_MICROVM_MAX_DURATION_SECONDS',
+        ),
+        LAMBDA_MICROVM_IDLE_SECONDS: read('LAMBDA_MICROVM_IDLE_SECONDS'),
+        LAMBDA_MICROVM_SUSPEND_SECONDS: read('LAMBDA_MICROVM_SUSPEND_SECONDS'),
+        LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS: read(
+            'LAMBDA_MICROVM_AUTH_TOKEN_TTL_SECONDS',
+        ),
+        LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS: read(
+            'LAMBDA_MICROVM_LAUNCH_TIMEOUT_MS',
+        ),
+        LAMBDA_MICROVM_HEALTH_TIMEOUT_MS: read(
+            'LAMBDA_MICROVM_HEALTH_TIMEOUT_MS',
+        ),
+        LAMBDA_MICROVM_LAUNCH_TPS: read('LAMBDA_MICROVM_LAUNCH_TPS'),
+        LAMBDA_MICROVM_TOKEN_TPS: read('LAMBDA_MICROVM_TOKEN_TPS'),
+    };
 }
 
 /** Returns the first invalid Lambda numeric setting for fail-fast startup. */
 export function lambdaMicrovmNumericConfigError(
-  config: LambdaMicrovmNumericConfig,
+    config: LambdaMicrovmNumericConfig,
 ): string | undefined {
-  for (const name of Object.keys(lambdaMicrovmNumericRanges) as Array<keyof LambdaMicrovmNumericConfig>) {
-    const value = config[name];
-    const { min, max } = lambdaMicrovmNumericRanges[name];
-    if (!Number.isSafeInteger(value) || value < min || (max != null && value > max)) {
-      const range = max == null ? `at least ${min}` : `between ${min} and ${max}`;
-      return `${name} must be a whole number ${range}`;
+    for (const name of Object.keys(lambdaMicrovmNumericRanges) as Array<
+        keyof LambdaMicrovmNumericConfig
+    >) {
+        const value = config[name];
+        const { min, max } = lambdaMicrovmNumericRanges[name];
+        if (
+            !Number.isSafeInteger(value) ||
+            value < min ||
+            (max != null && value > max)
+        ) {
+            const range =
+                max == null ? `at least ${min}` : `between ${min} and ${max}`;
+            return `${name} must be a whole number ${range}`;
+        }
     }
-  }
-  return undefined;
+    return undefined;
 }
 
-export function resolveEgressGrantTtlSeconds(rawTtlSeconds: string | undefined, jobTimeoutMs: number): number {
-  const defaultTtlSeconds = Math.max(1, Math.ceil((jobTimeoutMs + EGRESS_GRANT_GRACE_MS) / 1000));
-  if (rawTtlSeconds == null || rawTtlSeconds.trim() === '') {
-    return defaultTtlSeconds;
-  }
+export function resolveEgressGrantTtlSeconds(
+    rawTtlSeconds: string | undefined,
+    jobTimeoutMs: number,
+): number {
+    const defaultTtlSeconds = Math.max(
+        1,
+        Math.ceil((jobTimeoutMs + EGRESS_GRANT_GRACE_MS) / 1000),
+    );
+    if (rawTtlSeconds == null || rawTtlSeconds.trim() === '') {
+        return defaultTtlSeconds;
+    }
 
-  const configuredTtlSeconds = Number(rawTtlSeconds);
-  if (!Number.isFinite(configuredTtlSeconds) || configuredTtlSeconds <= 0) {
-    return defaultTtlSeconds;
-  }
+    const configuredTtlSeconds = Number(rawTtlSeconds);
+    if (!Number.isFinite(configuredTtlSeconds) || configuredTtlSeconds <= 0) {
+        return defaultTtlSeconds;
+    }
 
-  return Math.max(1, Math.ceil(configuredTtlSeconds));
+    return Math.max(1, Math.ceil(configuredTtlSeconds));
 }
 
-const lambdaMicrovmNumericConfig = resolveLambdaMicrovmNumericConfig(process.env);
+const lambdaMicrovmNumericConfig = resolveLambdaMicrovmNumericConfig(
+    process.env,
+);
 
 function configuredNumber(raw: string | undefined, fallback: number): number {
-  return raw == null || raw.trim() === '' ? fallback : Number(raw);
+    return raw == null || raw.trim() === '' ? fallback : Number(raw);
 }
 
 function configuredChoice<T extends string>(
-  raw: string | undefined,
-  name: string,
-  fallback: T,
-  allowed: readonly T[],
+    raw: string | undefined,
+    name: string,
+    fallback: T,
+    allowed: readonly T[],
 ): T {
-  if (raw == null) return fallback;
-  if (allowed.includes(raw as T)) return raw as T;
-  throw new Error(`${name} must be one of: ${allowed.join(', ')}`);
+    if (raw == null) return fallback;
+    if (allowed.includes(raw as T)) return raw as T;
+    throw new Error(`${name} must be one of: ${allowed.join(', ')}`);
 }
 
 export function resolveSandboxBackend(
-  raw: string | undefined,
+    raw: string | undefined,
 ): 'http' | 'lambda-microvm' {
-  return configuredChoice(
-    raw,
-    'CODEAPI_SANDBOX_BACKEND',
-    'http',
-    ['http', 'lambda-microvm'],
-  );
+    return configuredChoice(raw, 'CODEAPI_SANDBOX_BACKEND', 'http', [
+        'http',
+        'lambda-microvm',
+    ]);
 }
 
 export function resolveRuntimeSessionMode(
-  raw: string | undefined,
+    raw: string | undefined,
 ): 'stateless' | 'affinity' | 'strict' {
-  return configuredChoice(
-    raw,
-    'CODEAPI_RUNTIME_SESSION_MODE',
-    'stateless',
-    ['stateless', 'affinity', 'strict'],
-  );
+    return configuredChoice(raw, 'CODEAPI_RUNTIME_SESSION_MODE', 'stateless', [
+        'stateless',
+        'affinity',
+        'strict',
+    ]);
 }
 
 const sandboxBackend = resolveSandboxBackend(process.env.CODEAPI_SANDBOX_BACKEND);
@@ -331,6 +390,8 @@ export const env = {
   EXECUTION_MANIFEST_MAX_UPLOAD_BYTES: Number(process.env.EXECUTION_MANIFEST_MAX_UPLOAD_BYTES) || defaultMaxFileSize,
   EXECUTION_MANIFEST_MAX_OUTPUT_FILES: Number(process.env.EXECUTION_MANIFEST_MAX_OUTPUT_FILES) || 50,
   EXECUTION_MANIFEST_MAX_REQUESTS: Number(process.env.EXECUTION_MANIFEST_MAX_REQUESTS) || 1000,
+  // Redis - Cluster mode (GCP Memorystore cluster, AWS ElastiCache cluster, etc.)
+  USE_REDIS_CLUSTER: process.env.USE_REDIS_CLUSTER === 'true',
   // Redis - Alternative DNS Lookup for AWS ElastiCache TLS connections
   REDIS_USE_ALTERNATIVE_DNS_LOOKUP: process.env.REDIS_USE_ALTERNATIVE_DNS_LOOKUP === 'true',
   /**
@@ -408,14 +469,14 @@ export const env = {
 const default_run_memory_limit = 256 * 1024 * 1024;
 
 type PlanLimit = {
-  run_memory_limit?: number;
-  max_file_size?: number;
+    run_memory_limit?: number;
+    max_file_size?: number;
 };
 
 type PlanLimits = {
-  default: Required<PlanLimit>;
+    default: Required<PlanLimit>;
 } & {
-  [key: string]: PlanLimit | undefined;
+    [key: string]: PlanLimit | undefined;
 };
 
 /**
@@ -423,26 +484,38 @@ type PlanLimits = {
  * JSON object keyed by the `plan_id` JWT claim. Unknown or absent plan ids
  * fall back to the default tier, which is the only entry defined in code.
  */
-export function parsePlanLimits(raw: string | undefined): Record<string, PlanLimit> {
-  if (raw == null || raw.trim() === '') {
-    return {};
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(`CODEAPI_PLAN_LIMITS is not valid JSON: ${(error as Error).message}`);
-  }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('CODEAPI_PLAN_LIMITS must be a JSON object keyed by plan id');
-  }
-  return parsed as Record<string, PlanLimit>;
+export function parsePlanLimits(
+    raw: string | undefined,
+): Record<string, PlanLimit> {
+    if (raw == null || raw.trim() === '') {
+        return {};
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (error) {
+        throw new Error(
+            `CODEAPI_PLAN_LIMITS is not valid JSON: ${(error as Error).message}`,
+        );
+    }
+    if (
+        parsed === null ||
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed)
+    ) {
+        throw new Error(
+            'CODEAPI_PLAN_LIMITS must be a JSON object keyed by plan id',
+        );
+    }
+    return parsed as Record<string, PlanLimit>;
 }
 
 export const planLimits: PlanLimits = {
-  ...parsePlanLimits(process.env.CODEAPI_PLAN_LIMITS),
-  default: {
-    run_memory_limit: Number(process.env.SANDBOX_RUN_MEMORY_LIMIT) || default_run_memory_limit,
-    max_file_size: env.MAX_FILE_SIZE,
-  },
+    ...parsePlanLimits(process.env.CODEAPI_PLAN_LIMITS),
+    default: {
+        run_memory_limit:
+            Number(process.env.SANDBOX_RUN_MEMORY_LIMIT) ||
+            default_run_memory_limit,
+        max_file_size: env.MAX_FILE_SIZE,
+    },
 };
