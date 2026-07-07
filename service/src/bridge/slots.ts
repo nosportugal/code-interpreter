@@ -1,4 +1,4 @@
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis-connection';
 
 /** Hard bound keeps every atomic scheduling scan constant-sized. */
 export const MAX_WORKSPACE_LEASE_SLOTS = 8;
@@ -8,7 +8,7 @@ export const MAX_WORKSPACE_LEASE_SLOTS = 8;
  * Workspace mutation uncertainty is fenced separately by the assignment store.
  */
 export class BridgeWorkspaceSlots {
-  constructor(private readonly redis: Redis) {}
+  constructor(private readonly redis: RedisClient) {}
 
   private keys(workerId: string): string[] {
     const prefix = `codeapi:bridge:v1:worker:${encodeURIComponent(workerId)}`;

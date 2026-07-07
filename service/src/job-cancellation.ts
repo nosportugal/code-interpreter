@@ -1,4 +1,4 @@
-import type IORedis from 'ioredis';
+import type { RedisClient } from './redis-connection';
 import type { Job, QueueEvents } from 'bullmq';
 
 const JOB_CANCELLATION_PREFIX = 'codeapi:job-cancellation:v1';
@@ -49,19 +49,19 @@ function parseTarget(raw: string): JobTarget | undefined {
  * this path, so ordinary queue traffic pays no extra Redis round trips.
  */
 export class JobCancellationRegistry {
-  private subscriber?: IORedis;
+  private subscriber?: RedisClient;
   private readonly controllers = new Map<
     string,
     { target: JobTarget; controllers: Set<AbortController> }
   >();
   private startPromise?: Promise<void>;
-  private readonly subscriberEndHandlers = new WeakMap<IORedis, () => void>();
+  private readonly subscriberEndHandlers = new WeakMap<RedisClient, () => void>();
   private reconcileTimer?: ReturnType<typeof setTimeout>;
   private subscriberRestartTimer?: ReturnType<typeof setTimeout>;
   private reconcileRetryMs = 100;
   private closed = false;
 
-  constructor(private readonly commands: IORedis) {}
+  constructor(private readonly commands: RedisClient) {}
 
   private readonly onSubscriberError = (): void => {
     // ioredis reconnects using the shared policy. The listener prevents a
@@ -85,7 +85,7 @@ export class JobCancellationRegistry {
     }
   };
 
-  private detachSubscriber(subscriber: IORedis): void {
+  private detachSubscriber(subscriber: RedisClient): void {
     subscriber.removeListener('error', this.onSubscriberError);
     subscriber.removeListener('ready', this.onSubscriberReady);
     subscriber.removeListener('message', this.onSubscriberMessage);
@@ -94,7 +94,7 @@ export class JobCancellationRegistry {
     this.subscriberEndHandlers.delete(subscriber);
   }
 
-  private restartAfterTerminalDisconnect(subscriber: IORedis): void {
+  private restartAfterTerminalDisconnect(subscriber: RedisClient): void {
     if (this.closed || this.subscriber !== subscriber) return;
     this.detachSubscriber(subscriber);
     this.subscriber = undefined;
@@ -261,7 +261,7 @@ export class JobCancellationRegistry {
 }
 
 async function cancelJobInRedis(
-  commands: IORedis,
+  commands: RedisClient,
   target: JobTarget,
   ttlSeconds: number,
   includeResult: boolean,
@@ -300,7 +300,7 @@ async function cancelJobInRedis(
 }
 
 export async function requestJobCancellation(
-  commands: IORedis,
+  commands: RedisClient,
   target: JobTarget,
   ttlSeconds: number,
 ): Promise<boolean> {
@@ -348,7 +348,7 @@ export function jobCancellationRetentionSeconds(
  * cannot repeat sandbox mutations. Keep the status small: reconnect MGETs must
  * never load every active job's output into each API/worker replica. */
 export async function commitJobResult<T>(
-  commands: IORedis,
+  commands: RedisClient,
   target: JobTarget,
   result: T,
   ttlSeconds: number,
@@ -396,7 +396,7 @@ export async function commitJobResult<T>(
  * recovery horizon. An ambiguous/stalled attempt is never permission to rerun.
  * Completion lookup and claim are atomic, so there is no read-then-start gap. */
 export async function claimJobExecution<T>(
-  commands: IORedis,
+  commands: RedisClient,
   target: JobTarget,
   ttlSeconds: number,
 ): Promise<{ status: 'claimed' } | { status: 'completed'; result: T }> {
@@ -432,7 +432,7 @@ export async function claimJobExecution<T>(
 }
 
 export async function readCommittedJobResult<T>(
-  commands: IORedis,
+  commands: RedisClient,
   target: JobTarget,
 ): Promise<{ result: T } | undefined> {
   const [state, value] = await commands.mget(
@@ -448,7 +448,7 @@ export async function readCommittedJobResult<T>(
  * retain ownership until it succeeds or the job's ORIGINAL deadline expires.
  * A delayed queue.add must carry that same timestamp into the worker. */
 export async function fenceJobCancellation<T = unknown>(args: {
-  commands: IORedis;
+  commands: RedisClient;
   target: JobTarget;
   ttlSeconds: number;
   deadlineAtMs: number;
@@ -555,7 +555,7 @@ export function jobResultCommitFailure(
 }
 
 export async function waitForJobWithCancellation<T>(args: {
-  commands: IORedis;
+  commands: RedisClient;
   registry: JobCancellationRegistry;
   job: Job<unknown, T>;
   events: QueueEvents;

@@ -1,9 +1,9 @@
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis-connection';
 
 /** Bounded FIFO admission shared by API replicas. Entries expire after caller deadlines. */
 export class BridgeAdmissionQueue {
   constructor(
-    private readonly redis: Redis,
+    private readonly redis: RedisClient,
     private readonly capacity = 32,
   ) {}
 
