@@ -1,8 +1,16 @@
 # Force git to be case-sensitive on case-insensitive filesystems
-* text=auto
+* text=auto eol=lf
 *.js text eol=lf
 *.ts text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 *.json text eol=lf
 *.md text eol=lf
+
+# Build-critical files: CRLF here breaks shebangs and shell redirects
+*.sh text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+*.txt text eol=lf
+Dockerfile* text eol=lf
+pre-commit text eol=lf
