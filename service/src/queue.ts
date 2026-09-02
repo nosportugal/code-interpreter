@@ -7,13 +7,13 @@ import type * as t from './types';
 import { Jobs } from './enum';
 import { env } from './config';
 import {
-  queueNameForExecution,
-  queueNamesForExecutionProfile,
+    queueNameForExecution,
+    queueNamesForExecutionProfile,
 } from './execution-profile';
 import type {
-  ExecutionProfile,
-  ExecutionProfileSource,
-  SandboxBackendName,
+    ExecutionProfile,
+    ExecutionProfileSource,
+    SandboxBackendName,
 } from './execution-profile';
 import logger from './logger';
 import { redisReconnectDelay } from './redis-options';
@@ -43,7 +43,7 @@ const connection = createRedisConnection({
     retryStrategy,
     reconnectOnError,
     enableReadyCheck: true,
-    disconnectTimeout: 2000,
+    connectTimeout: 2000,
 });
 const jobCancellationRegistry = new JobCancellationRegistry(connection);
 
@@ -56,7 +56,7 @@ const prefix = bullmqPrefix();
 const queueNames = queueNamesForExecutionProfile(
     env.EXECUTION_PROFILE,
     env.EXECUTION_PROFILE_SOURCE,
-    env.SANDBOX_BACKEND,
+    env.SANDBOX_BACKEND
 );
 export interface QueueBinding {
     queue: Queue<t.JobData, t.JobResult, Jobs.execute>;
@@ -90,7 +90,7 @@ export function getExecutionQueueBinding(
     language: 'python' | 'bash',
     backend: SandboxBackendName | undefined = env.SANDBOX_BACKEND,
     profile: ExecutionProfile = env.EXECUTION_PROFILE,
-    source: ExecutionProfileSource = env.EXECUTION_PROFILE_SOURCE,
+    source: ExecutionProfileSource = env.EXECUTION_PROFILE_SOURCE
 ): QueueBinding {
     const name = queueNameForExecution(
         language,
@@ -123,7 +123,7 @@ const QUEUE_METRICS_TIMEOUT_MS = 1000;
 async function withTimeout<T>(
     promise: Promise<T>,
     timeoutMs: number,
-    message: string,
+    message: string
 ): Promise<T> {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     void promise.catch(() => undefined);
@@ -146,12 +146,12 @@ registerBullmqQueueMetricsCollector(async () => {
                 const counts = await withTimeout(
                     queue.getJobCounts(...queueMetricStates),
                     QUEUE_METRICS_TIMEOUT_MS,
-                    `Timed out collecting BullMQ queue metrics for ${name}`,
+                    `Timed out collecting BullMQ queue metrics for ${name}`
                 );
                 for (const state of queueMetricStates) {
                     bullmqQueueJobs.set(
                         { queue: name, state },
-                        counts[state] ?? 0,
+                        counts[state] ?? 0
                     );
                 }
             } catch (error) {
@@ -163,7 +163,7 @@ registerBullmqQueueMetricsCollector(async () => {
                     bullmqQueueJobs.remove({ queue: name, state });
                 }
             }
-        }),
+        })
     );
 });
 
@@ -175,20 +175,20 @@ registerBullmqQueueMetricsCollector(async () => {
 setMaxListeners(0, pyQueue, otherQueue, pyQueueEvents, otherQueueEvents);
 
 export async function closeQueueConnections(): Promise<void> {
-  await Promise.all(
-    [...queueResources.values()].flatMap(({ queue, events }) => [
-      queue.close(),
-      events.close(),
-    ]).concat(jobCancellationRegistry.close()),
-  );
+    await Promise.all(
+        [...queueResources.values()].flatMap(({ queue, events }) => [
+            queue.close(),
+            events.close(),
+        ]).concat(jobCancellationRegistry.close()),
+    );
 }
 
 export {
-  pyQueue,
-  otherQueue,
-  pyQueueEvents,
-  otherQueueEvents,
-  queueNames,
-  connection,
-  jobCancellationRegistry,
+    pyQueue,
+    otherQueue,
+    pyQueueEvents,
+    otherQueueEvents,
+    queueNames,
+    connection,
+    jobCancellationRegistry,
 };
