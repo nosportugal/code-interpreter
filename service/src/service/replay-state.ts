@@ -28,11 +28,12 @@ import axios from 'axios';
 import { nanoid } from 'nanoid';
 import type { Redis } from 'ioredis';
 import type * as t from '../types';
+import type { RedisClient } from '../redis-connection';
 import type { LCTool } from '../preamble';
 import type {
-  ExecutionProfile,
-  ExecutionProfileSource,
-  SandboxBackendName,
+    ExecutionProfile,
+    ExecutionProfileSource,
+    SandboxBackendName,
 } from '../execution-profile';
 import { connection } from '../queue';
 import { env } from '../config';
@@ -67,7 +68,7 @@ export const MAX_EXECUTION_STATE_BYTES = 10_000_000;
  * at 10 minutes so short job timeouts don't produce a tiny lock window. */
 export const REPLAY_LOCK_TTL_MS = Math.max(
     10 * 60 * 1000,
-    env.JOB_TIMEOUT * 2 + 30_000,
+    env.JOB_TIMEOUT * 2 + 30_000
 );
 
 /** Per-entry cap for a single serialized tool result (JSON bytes). Keeps the
@@ -80,7 +81,8 @@ export const MAX_TOOL_RESULT_BYTES = env.PTC_MAX_TOOL_RESULT_BYTES;
  * proportionally with `MAX_EXECUTION_STATE_BYTES` (ratio 4:1 vs exec_state)
  * so a long replay flow can accumulate ~8 saturating tool results before
  * being asked to break work into a fresh execution. */
-export const MAX_TOOL_HISTORY_TOTAL_BYTES = env.PTC_MAX_TOOL_HISTORY_TOTAL_BYTES;
+export const MAX_TOOL_HISTORY_TOTAL_BYTES =
+    env.PTC_MAX_TOOL_HISTORY_TOTAL_BYTES;
 
 /** Maximum number of keys `scanKeys` will return in a single call. The janitor
  * runs every `STALE_CLEANUP_INTERVAL` and processes whatever this yields; if
@@ -225,7 +227,7 @@ export class ExecutionStateTooLargeError extends Error {
     readonly cap: number;
     constructor(execution_id: string, bytes: number, cap: number) {
         super(
-            `ExecutionState for ${execution_id} is ${bytes} bytes, exceeds cap ${cap}`,
+            `ExecutionState for ${execution_id} is ${bytes} bytes, exceeds cap ${cap}`
         );
         this.name = 'ExecutionStateTooLargeError';
         this.bytes = bytes;
@@ -253,26 +255,26 @@ export class ExecutionStateTooLargeError extends Error {
  * Lua runner, but its Lua coverage is a subset of real Redis (notably
  * partial `redis.call` arg parsing); the integration suite still runs
  * against a real Redis container so any divergence surfaces there. */
-type RedisWithScripts = Redis & {
+type RedisWithScripts = RedisClient & {
     releaseExecutionLockScript(lockKey: string, token: string): Promise<number>;
     setExecutionResultScript(
         stateKey: string,
         resultKey: string,
         stateJson: string,
         resultJson: string,
-        ttlSeconds: string,
+        ttlSeconds: string
     ): Promise<number>;
     setExecutionErrorScript(
         stateKey: string,
         stateJson: string,
-        ttlSeconds: string,
+        ttlSeconds: string
     ): Promise<number>;
 };
 
 const SCRIPTS_REGISTERED = Symbol.for('replay-state.scriptsRegistered');
 
-function registerScripts(client: Redis): RedisWithScripts {
-    const tagged = client as Redis & { [SCRIPTS_REGISTERED]?: true };
+function registerScripts(client: RedisClient): RedisWithScripts {
+    const tagged = client as RedisClient & { [SCRIPTS_REGISTERED]?: true };
     if (tagged[SCRIPTS_REGISTERED]) return client as RedisWithScripts;
     client.defineCommand('releaseExecutionLockScript', {
         numberOfKeys: 1,
@@ -311,7 +313,7 @@ let redis: RedisWithScripts = registerScripts(connection);
  * ONLY for unit tests; production code should never call this. The pair
  * `setRedisForTests`/`resetRedisForTests` lets a test suite isolate per-test
  * keyspaces by handing in fresh mock instances. */
-export function setRedisForTests(client: Redis): void {
+export function setRedisForTests(client: RedisClient): void {
     redis = registerScripts(client);
 }
 
@@ -329,7 +331,7 @@ export function resetRedisForTests(): void {
  *  key; normalize on read. Safe to delete one EXECUTION_STATE_TTL window
  *  after the external_user_id rollout. */
 export function normalizeExecutionState(state: ExecutionState): ExecutionState {
-    const legacy = (state as Record<string, unknown>)['chcUserId']; // leak-check:allow
+    const legacy = (state as unknown as Record<string, unknown>)['chcUserId']; // leak-check:allow
     if (state.externalUserId == null && typeof legacy === 'string') {
         state.externalUserId = legacy;
     }
@@ -337,7 +339,7 @@ export function normalizeExecutionState(state: ExecutionState): ExecutionState {
 }
 
 export async function getExecutionState(
-    execution_id: string,
+    execution_id: string
 ): Promise<ExecutionState | null> {
     const data = await redis.get(`exec_state:${hashTag(execution_id)}`);
     return data != null
@@ -352,19 +354,19 @@ export async function setExecutionState(state: ExecutionState): Promise<void> {
         throw new ExecutionStateTooLargeError(
             state.execution_id,
             serializedBytes,
-            MAX_EXECUTION_STATE_BYTES,
+            MAX_EXECUTION_STATE_BYTES
         );
     }
     await redis.set(
         `exec_state:${hashTag(state.execution_id)}`,
         serialized,
         'EX',
-        EXECUTION_STATE_TTL,
+        EXECUTION_STATE_TTL
     );
 }
 
 export async function deleteExecutionState(
-    execution_id: string,
+    execution_id: string
 ): Promise<void> {
     await redis.del(`exec_state:${hashTag(execution_id)}`);
 }
@@ -379,7 +381,7 @@ export async function deleteExecutionState(
  * another request holds the lock. Prevents TOCTOU on concurrent continuations.
  */
 export async function acquireExecutionLock(
-    execution_id: string,
+    execution_id: string
 ): Promise<string | null> {
     const token = nanoid();
     const result = await redis.set(
@@ -387,19 +389,19 @@ export async function acquireExecutionLock(
         token,
         'PX',
         REPLAY_LOCK_TTL_MS,
-        'NX',
+        'NX'
     );
     return result === 'OK' ? token : null;
 }
 
 export async function releaseExecutionLock(
     execution_id: string,
-    token: string,
+    token: string
 ): Promise<void> {
     try {
         await redis.releaseExecutionLockScript(
             `exec_lock:${hashTag(execution_id)}`,
-            token,
+            token
         );
     } catch (err) {
         logger.warn('Failed to release exec lock', { execution_id, err });
@@ -426,25 +428,25 @@ function blockingResultKey(execution_id: string): string {
 
 export async function setBlockingResult(
     execution_id: string,
-    result: t.ExecuteResult,
+    result: t.ExecuteResult
 ): Promise<void> {
     await redis.set(
         blockingResultKey(execution_id),
         JSON.stringify(result),
         'EX',
-        EXECUTION_STATE_TTL,
+        EXECUTION_STATE_TTL
     );
 }
 
 export async function getBlockingResult(
-    execution_id: string,
+    execution_id: string
 ): Promise<t.ExecuteResult | null> {
     const data = await redis.get(blockingResultKey(execution_id));
     return data != null ? (JSON.parse(data) as t.ExecuteResult) : null;
 }
 
 export async function deleteBlockingResult(
-    execution_id: string,
+    execution_id: string
 ): Promise<void> {
     await redis.del(blockingResultKey(execution_id));
 }
@@ -466,7 +468,7 @@ export async function deleteBlockingResult(
  * state, the entire update is skipped. */
 export async function setExecutionResult(
     execution_id: string,
-    result: t.ExecuteResult,
+    result: t.ExecuteResult
 ): Promise<void> {
     const stateKey = `exec_state:${hashTag(execution_id)}`;
     const resultKey = `exec_result:${hashTag(execution_id)}`;
@@ -484,7 +486,7 @@ export async function setExecutionResult(
         throw new ExecutionStateTooLargeError(
             execution_id,
             Buffer.byteLength(updatedSerialized, 'utf8'),
-            MAX_EXECUTION_STATE_BYTES,
+            MAX_EXECUTION_STATE_BYTES
         );
     }
     /** EXISTS-then-SET both keys atomically so a concurrent
@@ -496,13 +498,13 @@ export async function setExecutionResult(
         resultKey,
         updatedSerialized,
         JSON.stringify(result),
-        String(EXECUTION_STATE_TTL),
+        String(EXECUTION_STATE_TTL)
     );
 }
 
 export async function setExecutionError(
     execution_id: string,
-    error: Error,
+    error: Error
 ): Promise<void> {
     const stateKey = `exec_state:${hashTag(execution_id)}`;
     const existing = await getExecutionState(execution_id);
@@ -517,7 +519,7 @@ export async function setExecutionError(
         throw new ExecutionStateTooLargeError(
             execution_id,
             Buffer.byteLength(serialized, 'utf8'),
-            MAX_EXECUTION_STATE_BYTES,
+            MAX_EXECUTION_STATE_BYTES
         );
     }
     /** Same race window as `setExecutionResult`: a `cleanupExecution`
@@ -527,7 +529,7 @@ export async function setExecutionError(
     await redis.setExecutionErrorScript(
         stateKey,
         serialized,
-        String(EXECUTION_STATE_TTL),
+        String(EXECUTION_STATE_TTL)
     );
 }
 
@@ -548,7 +550,7 @@ export function historyKey(execution_id: string): string {
 function canonicalEntryBody(
     result: unknown,
     isError: boolean | undefined,
-    errorMessage: string | undefined,
+    errorMessage: string | undefined
 ): string {
     return JSON.stringify({
         result,
@@ -586,7 +588,7 @@ export async function computeToolHistoryDelta(
         tool_name?: string;
         input_hash?: string;
         call_site?: string;
-    }>,
+    }>
 ): Promise<ToolHistoryDelta | { error: string; status?: number }> {
     const serializedByCallId = new Map<string, string>();
     if (results.length === 0) {
@@ -615,7 +617,7 @@ export async function computeToolHistoryDelta(
                 {
                     execution_id,
                     call_id: callIds[i],
-                },
+                }
             );
         }
     }
@@ -644,12 +646,12 @@ export async function computeToolHistoryDelta(
             const incomingBody = canonicalEntryBody(
                 r.result,
                 r.is_error,
-                r.error_message,
+                r.error_message
             );
             const storedBody = canonicalEntryBody(
                 existing.entry.result,
                 existing.entry.is_error,
-                existing.entry.error_message,
+                existing.entry.error_message
             );
             if (incomingBody !== storedBody) {
                 return {
@@ -675,7 +677,7 @@ export async function computeToolHistoryDelta(
  * before this is called; failure is logged and propagated. */
 export async function commitToolHistoryAndState(
     state: ExecutionState,
-    delta: ToolHistoryDelta,
+    delta: ToolHistoryDelta
 ): Promise<void> {
     const serialized = JSON.stringify(state);
     const serializedBytes = Buffer.byteLength(serialized, 'utf8');
@@ -687,7 +689,7 @@ export async function commitToolHistoryAndState(
         throw new ExecutionStateTooLargeError(
             state.execution_id,
             serializedBytes,
-            MAX_EXECUTION_STATE_BYTES,
+            MAX_EXECUTION_STATE_BYTES
         );
     }
     const hKey = historyKey(state.execution_id);
@@ -713,7 +715,7 @@ export async function commitToolHistoryAndState(
     const results = await tx.exec();
     if (!results) {
         throw new Error(
-            `Redis transaction aborted for execution ${state.execution_id}`,
+            `Redis transaction aborted for execution ${state.execution_id}`
         );
     }
     for (const [err] of results) {
@@ -738,14 +740,14 @@ export async function refreshExecutionTtl(execution_id: string): Promise<void> {
     await Promise.all([
         redis.expire(
             `exec_state:${hashTag(execution_id)}`,
-            EXECUTION_STATE_TTL,
+            EXECUTION_STATE_TTL
         ),
         redis.expire(historyKey(execution_id), EXECUTION_STATE_TTL),
     ]);
 }
 
 export async function loadToolHistory(
-    execution_id: string,
+    execution_id: string
 ): Promise<Record<string, HistoryEntry>> {
     const raw = await redis.hgetall(historyKey(execution_id));
     const out: Record<string, HistoryEntry> = {};
@@ -782,7 +784,7 @@ export async function cleanupStaleExecutions(): Promise<number> {
             redis,
             'exec_state:*',
             200,
-            SCAN_KEYS_DEFAULT_LIMIT,
+            SCAN_KEYS_DEFAULT_LIMIT
         );
         if (keys.length === 0) return 0;
         const now = Date.now();
@@ -824,13 +826,13 @@ export async function cleanupStaleExecutions(): Promise<number> {
                      * visible to operators via both `ptc_replay_stale_cleanups_total`
                      * and structured logs, instead of silently disappearing. */
                     const orphanId = stripHashTag(
-                        batchKeys[i].slice('exec_state:'.length),
+                        batchKeys[i].slice('exec_state:'.length)
                     );
                     logger.warn(
                         'Reaping malformed exec_state and sibling keys',
                         {
                             execution_id: orphanId,
-                        },
+                        }
                     );
                     await Promise.all([
                         redis.del(batchKeys[i]),
@@ -845,7 +847,7 @@ export async function cleanupStaleExecutions(): Promise<number> {
                                     err instanceof Error
                                         ? err.message
                                         : String(err),
-                            },
+                            }
                         );
                     });
                     cleaned++;
@@ -872,7 +874,7 @@ export async function cleanupStaleExecutions(): Promise<number> {
                                 {
                                     maxRedirects: 0,
                                     headers: internalServiceHeaders(),
-                                },
+                                }
                             )
                             .catch(() => {});
                     }
@@ -899,7 +901,7 @@ export async function cleanupStaleExecutions(): Promise<number> {
 
 export async function cleanupExecution(
     execution_id: string,
-    mode: 'blocking' | 'replay',
+    mode: 'blocking' | 'replay'
 ): Promise<void> {
     try {
         const ops: Array<Promise<unknown>> = [
@@ -915,9 +917,9 @@ export async function cleanupExecution(
                         {
                             maxRedirects: 0,
                             headers: internalServiceHeaders(),
-                        },
+                        }
                     )
-                    .catch(() => {}),
+                    .catch(() => {})
             );
         }
         await Promise.all(ops);
@@ -953,7 +955,9 @@ export function validateToolResult(r: unknown):
     const callId = obj.call_id;
     if (typeof callId !== 'string' || !CALL_ID_RE.test(callId)) {
         return {
-            error: `tool_results[].call_id must match /^call_\\d{3,6}$/, got: ${JSON.stringify(callId)}`,
+            error: `tool_results[].call_id must match /^call_\\d{3,6}$/, got: ${JSON.stringify(
+                callId
+            )}`,
         };
     }
     if (!('result' in obj)) {
@@ -1026,7 +1030,7 @@ export interface ValidatedContinuationResult {
  * so the branch coverage is unit-testable.
  */
 export function validateContinuationBatch(
-    tool_results: unknown[],
+    tool_results: unknown[]
 ):
     | { ok: true; results: ValidatedContinuationResult[] }
     | { ok: false; status: number; error: string } {
