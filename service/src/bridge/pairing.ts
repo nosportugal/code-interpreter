@@ -4,7 +4,7 @@ import {
   randomBytes,
 } from 'crypto';
 
-import type Redis from 'ioredis';
+import type { RedisClient } from '../redis-connection';
 
 import {
   verifyBridgeRecovery,
@@ -357,7 +357,7 @@ function validEd25519PublicKey(publicKey: string): boolean {
 
 export class RedisBridgePairingStore {
   constructor(
-    private readonly redis: Redis,
+    private readonly redis: RedisClient,
     private readonly pairingTtlSeconds = DEFAULT_PAIRING_TTL_SECONDS,
     private readonly credentialTtlSeconds = DEFAULT_CREDENTIAL_TTL_SECONDS,
     private readonly legacyScanClaimTtlMs = LEGACY_SCAN_CLAIM_TTL_MS,
