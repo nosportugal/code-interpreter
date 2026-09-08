@@ -230,6 +230,20 @@ redis.cluster.nodes contains a comma (auto-detect multiple nodes).
 {{- end }}
 
 {{/*
+Emit REDIS_KEY_PREFIX when redis.keyPrefix is set. Namespaces every Redis key
+CodeAPI owns (bridge, execution state, tool calls, sessions, rate limits and
+the BullMQ queues) so a shared Redis can host CodeAPI alongside other tenants.
+Renders nothing by default, leaving the historical unprefixed keyspace.
+Usage: {{ include "codeapi.redis.keyPrefixEnv" . }}
+*/}}
+{{- define "codeapi.redis.keyPrefixEnv" -}}
+{{- with .Values.redis.keyPrefix }}
+- name: REDIS_KEY_PREFIX
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
 Emit the Redis TLS + CA environment variables and volume mount for each
 component that needs it. These only apply to an external managed Redis, so
 they render nothing while the bundled subchart is enabled (redis.enabled=true

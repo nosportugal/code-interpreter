@@ -62,6 +62,7 @@ spec:
             - name: USE_REDIS_CLUSTER
               value: {{ include "codeapi.redis.clusterEnabled" . | quote }}
             {{- include "codeapi.redis.tlsEnv" . | nindent 12 }}
+            {{- include "codeapi.redis.keyPrefixEnv" . | nindent 12 }}
             - name: CODEAPI_BRIDGE_PAIRING_ROLLBACK_EPOCH
               valueFrom:
                 configMapKeyRef:

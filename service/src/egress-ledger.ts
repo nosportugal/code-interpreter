@@ -8,6 +8,7 @@ import {
     isClusterMode,
     type RedisClient,
 } from './redis-connection';
+import { redisKey } from './redis-keys';
 
 type LedgerStatus = 'active' | 'revoked';
 
@@ -56,7 +57,7 @@ export function setEgressLedgerRedisForTest(
 }
 
 function ledgerKey(grantId: string): string {
-    return `codeapi:egress:grant:${grantId}`;
+    return redisKey(`codeapi:egress:grant:${grantId}`);
 }
 
 function ttlSeconds(exp: number): number {

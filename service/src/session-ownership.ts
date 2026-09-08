@@ -1,4 +1,5 @@
 import { env } from './config';
+import { redisKey } from './redis-keys';
 
 /**
  * Ownership of a session's stored objects is recorded twice.
@@ -26,17 +27,32 @@ import { env } from './config';
 /** The subset of the Redis client these helpers need — narrow enough to
  *  fake in tests without standing up a connection. */
 export interface SessionOwnershipStore {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string, expiryMode: 'EX', ttlSeconds: number): Promise<unknown>;
-  del(...keys: string[]): Promise<unknown>;
+    get(key: string): Promise<string | null>;
+    set(
+        key: string,
+        value: string,
+        expiryMode: 'EX',
+        ttlSeconds: number,
+    ): Promise<unknown>;
+    del(...keys: string[]): Promise<unknown>;
 }
 
-export const sessionCacheKey = (session_id: string): string => `session:${session_id}`;
-export const sessionOwnerKey = (session_id: string): string => `session-owner:${session_id}`;
+export const sessionCacheKey = (session_id: string): string =>
+    redisKey(`session:${session_id}`);
+export const sessionOwnerKey = (session_id: string): string =>
+    redisKey(`session-owner:${session_id}`);
+
+/** Marker proving an object was uploaded through this deployment by the
+ *  named session owner; consulted before a download is authorized. */
+export const uploadMarkerKey = (
+    sessionKey: string | null | undefined,
+    session_id: string,
+    fileId: string,
+): string => redisKey(`upload:${sessionKey}${session_id}${fileId}`);
 
 export interface SessionOwnershipTtls {
-  cacheTtl?: number;
-  ownerTtl?: number;
+    cacheTtl?: number;
+    ownerTtl?: number;
 }
 
 /**
@@ -46,17 +62,17 @@ export interface SessionOwnershipTtls {
  * the two can never drift apart.
  */
 export function recordSessionOwnership(
-  store: SessionOwnershipStore,
-  session_id: string,
-  sessionKey: string,
-  ttls: SessionOwnershipTtls = {},
+    store: SessionOwnershipStore,
+    session_id: string,
+    sessionKey: string,
+    ttls: SessionOwnershipTtls = {},
 ): Promise<unknown> {
-  const cacheTtl = ttls.cacheTtl ?? env.SESSION_CACHE_TTL;
-  const ownerTtl = ttls.ownerTtl ?? env.SESSION_OWNER_TTL;
-  return Promise.all([
-    store.set(sessionCacheKey(session_id), sessionKey, 'EX', cacheTtl),
-    store.set(sessionOwnerKey(session_id), sessionKey, 'EX', ownerTtl),
-  ]);
+    const cacheTtl = ttls.cacheTtl ?? env.SESSION_CACHE_TTL;
+    const ownerTtl = ttls.ownerTtl ?? env.SESSION_OWNER_TTL;
+    return Promise.all([
+        store.set(sessionCacheKey(session_id), sessionKey, 'EX', cacheTtl),
+        store.set(sessionOwnerKey(session_id), sessionKey, 'EX', ownerTtl),
+    ]);
 }
 
 /**
@@ -66,10 +82,10 @@ export function recordSessionOwnership(
  * that never stored anything.
  */
 export function clearSessionOwnership(
-  store: SessionOwnershipStore,
-  session_id: string,
+    store: SessionOwnershipStore,
+    session_id: string,
 ): Promise<unknown> {
-  return store.del(sessionCacheKey(session_id), sessionOwnerKey(session_id));
+    return store.del(sessionCacheKey(session_id), sessionOwnerKey(session_id));
 }
 
 export type SessionOwnershipSource = 'session' | 'owner';
@@ -82,8 +98,12 @@ export type SessionOwnershipSource = 'session' | 'owner';
 export type SessionOwnershipDenial = 'expired' | 'unknown' | 'mismatch';
 
 export type SessionOwnershipResult =
-  | { authorized: true; source: SessionOwnershipSource }
-  | { authorized: false; reason: SessionOwnershipDenial; cachedSessionKey: string | null };
+    | { authorized: true; source: SessionOwnershipSource }
+    | {
+          authorized: false;
+          reason: SessionOwnershipDenial;
+          cachedSessionKey: string | null;
+      };
 
 /**
  * Decide whether `expectedSessionKey` owns `session_id`.
@@ -94,33 +114,37 @@ export type SessionOwnershipResult =
  * simply gone.
  */
 export async function authorizeSessionOwnership(
-  store: SessionOwnershipStore,
-  args: {
-    session_id: string;
-    expectedSessionKey: string;
-    /** Enable the durable fallback. Deletes pass true; reads keep the
-     *  `SESSION_CACHE_TTL` window they have always had. */
-    allowExpiredCache: boolean;
-  },
+    store: SessionOwnershipStore,
+    args: {
+        session_id: string;
+        expectedSessionKey: string;
+        /** Enable the durable fallback. Deletes pass true; reads keep the
+         *  `SESSION_CACHE_TTL` window they have always had. */
+        allowExpiredCache: boolean;
+    },
 ): Promise<SessionOwnershipResult> {
-  const { session_id, expectedSessionKey, allowExpiredCache } = args;
-  const cachedSessionKey = await store.get(sessionCacheKey(session_id));
-  if (cachedSessionKey === expectedSessionKey) {
-    return { authorized: true, source: 'session' };
-  }
-  if (cachedSessionKey !== null) {
-    return { authorized: false, reason: 'mismatch', cachedSessionKey };
-  }
-  if (!allowExpiredCache) {
-    return { authorized: false, reason: 'expired', cachedSessionKey };
-  }
+    const { session_id, expectedSessionKey, allowExpiredCache } = args;
+    const cachedSessionKey = await store.get(sessionCacheKey(session_id));
+    if (cachedSessionKey === expectedSessionKey) {
+        return { authorized: true, source: 'session' };
+    }
+    if (cachedSessionKey !== null) {
+        return { authorized: false, reason: 'mismatch', cachedSessionKey };
+    }
+    if (!allowExpiredCache) {
+        return { authorized: false, reason: 'expired', cachedSessionKey };
+    }
 
-  const recordedOwner = await store.get(sessionOwnerKey(session_id));
-  if (recordedOwner === expectedSessionKey) {
-    return { authorized: true, source: 'owner' };
-  }
-  if (recordedOwner === null) {
-    return { authorized: false, reason: 'unknown', cachedSessionKey };
-  }
-  return { authorized: false, reason: 'mismatch', cachedSessionKey: recordedOwner };
+    const recordedOwner = await store.get(sessionOwnerKey(session_id));
+    if (recordedOwner === expectedSessionKey) {
+        return { authorized: true, source: 'owner' };
+    }
+    if (recordedOwner === null) {
+        return { authorized: false, reason: 'unknown', cachedSessionKey };
+    }
+    return {
+        authorized: false,
+        reason: 'mismatch',
+        cachedSessionKey: recordedOwner,
+    };
 }

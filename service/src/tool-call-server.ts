@@ -21,6 +21,7 @@ import {
 } from './telemetry';
 import logger from './toolCallServerLogger';
 import { createRedisConnection, hashTag, scanKeys } from './redis-connection';
+import { redisKey } from './redis-keys';
 
 const INSTANCE_ID = process.env.INSTANCE_ID ?? nanoid();
 const PORT = Number(process.env.TOOL_CALL_SERVER_PORT) || 3033;
@@ -107,23 +108,23 @@ function errorResponse(error: string, status = 400): Response {
  * id (see `hashTag`) so they land on the same Redis Cluster slot, letting
  * `handleDeleteSession` clean them up with a single multi-key `DEL`. */
 function sessionKey(executionId: string): string {
-    return `tool_call:session:${hashTag(executionId)}`;
+    return redisKey(`tool_call:session:${hashTag(executionId)}`);
 }
 
 function pendingKey(executionId: string): string {
-    return `tool_call:pending:${hashTag(executionId)}`;
+    return redisKey(`tool_call:pending:${hashTag(executionId)}`);
 }
 
 function resultKey(executionId: string, callId: string): string {
-    return `tool_call:result:${hashTag(executionId)}:${callId}`;
+    return redisKey(`tool_call:result:${hashTag(executionId)}:${callId}`);
 }
 
 function completeKey(executionId: string): string {
-    return `tool_call:complete:${hashTag(executionId)}`;
+    return redisKey(`tool_call:complete:${hashTag(executionId)}`);
 }
 
 function errorKey(executionId: string): string {
-    return `tool_call:error:${hashTag(executionId)}`;
+    return redisKey(`tool_call:error:${hashTag(executionId)}`);
 }
 
 async function getSession(
@@ -425,7 +426,7 @@ async function handleDeleteSession(executionId: string): Promise<Response> {
 
         const keys = await scanKeys(
             redis,
-            `tool_call:*${hashTag(executionId)}*`,
+            redisKey(`tool_call:*${hashTag(executionId)}*`),
         );
         if (keys.length > 0) {
             await redis.del(...keys);

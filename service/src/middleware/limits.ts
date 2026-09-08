@@ -8,6 +8,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../types';
 import { env } from '../config';
 import { getExecutionIdentity } from '../execution-identity';
+import { redisKey } from '../redis-keys';
 import logger from '../logger';
 
 type RedisCommandTarget = {
@@ -129,7 +130,7 @@ const buildRateLimiter = (
         legacyHeaders: false,
         store: new RateLimitRedisStore({
             sendCommand,
-            prefix: `${prefix}:`,
+            prefix: redisKey(`${prefix}:`),
         }),
         keyGenerator,
         handler: (req: Request, res: Response) => {

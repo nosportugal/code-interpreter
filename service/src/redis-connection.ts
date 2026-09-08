@@ -7,6 +7,7 @@ import type {
     CommonRedisOptions,
 } from 'ioredis';
 import { redisKeepAliveOptions } from './redis-options';
+import { redisKeyPrefix } from './redis-keys';
 import logger from './logger';
 
 export type RedisClient = Redis | Cluster;
@@ -85,11 +86,15 @@ export function buildTlsOptions(): Record<string, unknown> | undefined {
 }
 
 /**
- * Returns the BullMQ `prefix` required in cluster mode so that all queue keys
- * land in the same hash slot.  Returns undefined in standalone mode (no prefix).
+ * Returns the BullMQ `prefix`: in cluster mode a hash tag so that all queue
+ * keys land in the same slot, plus `REDIS_KEY_PREFIX` when one is configured.
+ * Returns undefined for the unprefixed standalone default, letting BullMQ use
+ * its own `bull` prefix.
  */
 export function bullmqPrefix(): string | undefined {
-    return isClusterMode() ? '{codeapi}' : undefined;
+    const prefix = redisKeyPrefix();
+    if (isClusterMode()) return `${prefix}{codeapi}`;
+    return prefix === '' ? undefined : `${prefix}bull`;
 }
 
 /**
