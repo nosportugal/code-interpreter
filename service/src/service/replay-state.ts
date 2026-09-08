@@ -32,6 +32,7 @@ import type {
 import { connection } from '../queue';
 import { env } from '../config';
 import { redisKey } from '../redis-keys';
+import { scanKeys as scanRedisKeys } from '../redis-connection';
 import { internalServiceHeaders } from '../internal-service-auth';
 import logger from '../logger';
 import {
@@ -410,32 +411,14 @@ export async function releaseExecutionLock(
 // ---------------------------------------------------------------------------
 
 /** Iterate matching Redis keys with SCAN instead of the blocking KEYS command.
- * Stops collecting once `limit` keys have been gathered to keep the array
- * bounded on degenerate datasets. */
+ * Delegates to the shared helper, which fans SCAN out across master nodes when
+ * the handle is a Cluster — `Cluster` exposes no top-level `scanStream`. */
 export async function scanKeys(
     match: string,
     count = 200,
     limit = SCAN_KEYS_DEFAULT_LIMIT,
 ): Promise<string[]> {
-    const stream = redis.scanStream({ match, count });
-    const out: string[] = [];
-    for await (const batch of stream as AsyncIterable<string[]>) {
-        for (const key of batch) {
-            out.push(key);
-            if (out.length >= limit) {
-                stream.destroy();
-                logger.warn(
-                    'scanKeys hit limit; remaining keys deferred to next pass',
-                    {
-                        match,
-                        limit,
-                    },
-                );
-                return out;
-            }
-        }
-    }
-    return out;
+    return scanRedisKeys(redis, match, count, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -960,9 +943,7 @@ export async function cleanupExecution(
  * Validate the shape of a single `tool_results` entry. Prevents garbage
  * (null, wrong types, bad call_ids) from being persisted into Redis history.
  */
-export function validateToolResult(
-    r: unknown,
-):
+export function validateToolResult(r: unknown):
     | {
           call_id: string;
           result: unknown;

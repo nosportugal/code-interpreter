@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { connection } from '../queue';
+import type { RedisClient } from '../redis-connection';
 import { redisKey } from '../redis-keys';
 
 /**
@@ -19,7 +20,7 @@ const POISON_PREFIX = redisKey('rtsx:tps:poison:');
 const BUCKET_TTL_MS = 2_000;
 const DEFAULT_POISON_MS = 2_000;
 
-let redis: Redis = connection;
+let redis: RedisClient = connection;
 
 export function setRedisForTests(client: Redis): void {
     redis = client;
