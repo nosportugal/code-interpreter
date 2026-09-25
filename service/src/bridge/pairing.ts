@@ -236,7 +236,7 @@ export class RedisBridgePairingStore {
     private readonly credentialTtlSeconds = DEFAULT_CREDENTIAL_TTL_SECONDS,
     private readonly legacyScanClaimTtlMs = LEGACY_SCAN_CLAIM_TTL_MS,
     private readonly rollbackEpoch =
-      process.env.CODEAPI_BRIDGE_PAIRING_ROLLBACK_EPOCH?.trim() ?? '',
+    process.env.CODEAPI_BRIDGE_PAIRING_ROLLBACK_EPOCH?.trim() ?? '',
   ) {}
 
   async issue(

@@ -179,10 +179,10 @@ async function processJobInner(job: t.ExecuteJob): Promise<t.ExecuteResult> {
       ...(job.data.workspaceId == null
         ? {}
         : {
-            programmaticTransferReserveMs: programmaticTransferReserveMs(
-              env.JOB_TIMEOUT,
-            ),
-          }),
+          programmaticTransferReserveMs: programmaticTransferReserveMs(
+            env.JOB_TIMEOUT,
+          ),
+        }),
       payload: delivery.payload,
       egressGrantToken,
       executionManifestClaims,
@@ -220,12 +220,12 @@ async function processJobInner(job: t.ExecuteJob): Promise<t.ExecuteResult> {
         resultRestoreToken == null || resultRestoreToken.length === 0
           ? result
           : await restoreGatewaySandboxResult({
-              grantId: egressGrantId,
-              egressGrantToken: resultRestoreToken,
-              result,
-              isSynthetic: isSyntheticJob,
-              signal: controller.signal,
-            });
+            grantId: egressGrantId,
+            egressGrantToken: resultRestoreToken,
+            result,
+            isSynthetic: isSyntheticJob,
+            signal: controller.signal,
+          });
       if (commitAtHandoff && cancellationTarget != null) {
         // The bridge still owns its mutation fence here. A failed/ambiguous
         // commit quarantines that root before it can serve a caller retry.
@@ -319,9 +319,9 @@ async function processJobInner(job: t.ExecuteJob): Promise<t.ExecuteResult> {
         stderr,
         ...(responseData.pending_tool_calls_payload != null
           ? {
-              pending_tool_calls_payload:
+            pending_tool_calls_payload:
                 responseData.pending_tool_calls_payload,
-            }
+          }
           : {}),
       };
 

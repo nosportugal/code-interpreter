@@ -78,7 +78,7 @@ const objectResolver = new FileObjectResolver({
       ? redisClient.set(key, value, 'EX', env.SESSION_CACHE_TTL)
       : redisClient.set(key, value, 'EX', env.SESSION_CACHE_TTL, 'NX'),
     forget: (key: string, value: string) => redisClient.eval(
-      "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0", 1, key, value,
+      'if redis.call(\'GET\', KEYS[1]) == ARGV[1] then return redis.call(\'DEL\', KEYS[1]) end return 0', 1, key, value,
     ),
   } } : {}),
 });

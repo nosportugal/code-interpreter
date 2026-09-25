@@ -15,9 +15,9 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   isValidBridgeWorkerCapabilities,
   isValidBridgeWorkerId,
-    isWorkspaceToolRequest,
-    isWorkspaceToolResult,
-    workspaceIsolationKey,
+  isWorkspaceToolRequest,
+  isWorkspaceToolResult,
+  workspaceIsolationKey,
 } from '../../../packages/code/src/protocol';
 import type { BridgeWorkerBinding } from './pairing';
 import { BridgeAdmissionQueue } from './admission';
@@ -430,13 +430,13 @@ export class RedisBridgeStore {
     const snapshot = (await boundedCommand(
       this.redis.eval(
         [
-          "local registration = redis.call('GET', KEYS[1])",
-          "if not registration then return { false, false, false, -2 } end",
+          'local registration = redis.call(\'GET\', KEYS[1])',
+          'if not registration then return { false, false, false, -2 } end',
           'return {',
           '  registration,',
-          "  redis.call('GET', KEYS[2]) or false,",
-          "  redis.call('GET', KEYS[3]) or false,",
-          "  redis.call('PTTL', KEYS[1])",
+          '  redis.call(\'GET\', KEYS[2]) or false,',
+          '  redis.call(\'GET\', KEYS[3]) or false,',
+          '  redis.call(\'PTTL\', KEYS[1])',
           '}',
         ].join('\n'),
         3,
@@ -522,12 +522,12 @@ export class RedisBridgeStore {
       '  local pairingGeneration = redis.call(\'GET\', KEYS[7]) or "0"',
       '  if pairingGeneration ~= ARGV[5] then return -5 end',
       '  if ARGV[6] ~= "" then',
-      "    if redis.call('GET', KEYS[8]) ~= ARGV[6] then return -5 end",
+      '    if redis.call(\'GET\', KEYS[8]) ~= ARGV[6] then return -5 end',
       '  elseif ARGV[7] ~= "" and redis.call(\'GET\', KEYS[9]) ~= ARGV[7] then return -5',
       '  end',
       'end',
       'if ARGV[8] ~= "" then',
-      "  local stableIdentity = redis.call('GET', KEYS[8])",
+      '  local stableIdentity = redis.call(\'GET\', KEYS[8])',
       '  if stableIdentity and stableIdentity ~= ARGV[8] then return -4 end',
       '  if not stableIdentity then',
       '    if ARGV[7] ~= "" and redis.call(\'GET\', KEYS[9]) ~= ARGV[7] then return -4 end',
@@ -535,26 +535,26 @@ export class RedisBridgeStore {
       '  end',
       'elseif ARGV[7] ~= "" and redis.call(\'GET\', KEYS[9]) ~= ARGV[7] then return -4',
       'end',
-      "if redis.call('EXISTS', KEYS[3]) == 1 then return -2 end",
-      "if redis.call('EXISTS', KEYS[2]) == 1 then return -1 end",
-      "local current = redis.call('GET', KEYS[4])",
-      "if current == ARGV[1] and redis.call('EXISTS', KEYS[5]) == 1 and (redis.call('GET', KEYS[13]) or \"1\") ~= ARGV[10] then return -3 end",
-      "if not current and redis.call('EXISTS', KEYS[5]) == 1 then",
-      "  local owner = redis.call('GET', KEYS[6])",
+      'if redis.call(\'EXISTS\', KEYS[3]) == 1 then return -2 end',
+      'if redis.call(\'EXISTS\', KEYS[2]) == 1 then return -1 end',
+      'local current = redis.call(\'GET\', KEYS[4])',
+      'if current == ARGV[1] and redis.call(\'EXISTS\', KEYS[5]) == 1 and (redis.call(\'GET\', KEYS[13]) or "1") ~= ARGV[10] then return -3 end',
+      'if not current and redis.call(\'EXISTS\', KEYS[5]) == 1 then',
+      '  local owner = redis.call(\'GET\', KEYS[6])',
       '  if owner ~= ARGV[1] then return -3 end',
       'end',
       'if current then',
       '  if current ~= ARGV[1] then',
-      "    if redis.call('EXISTS', KEYS[5]) == 1 then return -3 end",
-      "    redis.call('SET', ARGV[4] .. current .. ':fenced', \"1\")",
+      '    if redis.call(\'EXISTS\', KEYS[5]) == 1 then return -3 end',
+      '    redis.call(\'SET\', ARGV[4] .. current .. \':fenced\', "1")',
       '  end',
       'end',
       'local registrationGeneration = tonumber(redis.call(\'GET\', KEYS[10]) or \"0\")',
-      "local registrationGenerationIncarnation = redis.call('GET', KEYS[11])",
+      'local registrationGenerationIncarnation = redis.call(\'GET\', KEYS[11])',
       'local registrationGenerationChanged = false',
       'if registrationGeneration < 1 or registrationGenerationIncarnation ~= ARGV[1] then',
-      "  registrationGeneration = redis.call('INCR', KEYS[10])",
-      "  redis.call('SET', KEYS[11], ARGV[1])",
+      '  registrationGeneration = redis.call(\'INCR\', KEYS[10])',
+      '  redis.call(\'SET\', KEYS[11], ARGV[1])',
       '  registrationGenerationChanged = true',
       'end',
       'redis.call(\'SET\', KEYS[1], ARGV[2], \"EX\", ARGV[3])',
@@ -879,9 +879,9 @@ export class RedisBridgeStore {
       selectedWorkspaceId == null
         ? undefined
         : workspaceAdmissionId(
-            selectedWorkspaceId,
-            selectedWorkspaceInstanceId,
-          );
+          selectedWorkspaceId,
+          selectedWorkspaceInstanceId,
+        );
     const workspaceSlots =
       selectedWorkspaceId != null &&
       (registration.capabilities.workspaceLeaseSlots ?? 1) > 1
@@ -1032,9 +1032,9 @@ export class RedisBridgeStore {
         ...(workspaceLeaseSlot === undefined
           ? {}
           : {
-              workspaceLeaseSlot,
-              workspaceFence: `native-workspace:${selectedWorkspaceAdmissionId!}`,
-            }),
+            workspaceLeaseSlot,
+            workspaceFence: `native-workspace:${selectedWorkspaceAdmissionId!}`,
+          }),
         ...(registration.identityId != null
           ? { workerIdentityId: registration.identityId }
           : {}),
@@ -1042,19 +1042,19 @@ export class RedisBridgeStore {
         runtimeSessionId: args.runtimeSessionId,
         ...(args.workspaceRequest != null
           ? {
-              executionKind: 'workspace_tool' as const,
-              request: args.workspaceRequest,
-            }
+            executionKind: 'workspace_tool' as const,
+            request: args.workspaceRequest,
+          }
           : args.workspaceId != null
             ? {
-                executionKind: 'workspace_programmatic' as const,
-                workspaceId: args.workspaceId,
-                request: {
-                  body: args.body,
-                  headers: args.headers,
-                },
-              }
-          : {
+              executionKind: 'workspace_programmatic' as const,
+              workspaceId: args.workspaceId,
+              request: {
+                body: args.body,
+                headers: args.headers,
+              },
+            }
+            : {
               request: {
                 body: args.body,
                 headers: args.headers,
@@ -1158,8 +1158,8 @@ export class RedisBridgeStore {
           // Do not quarantine unrelated roots or invalidate the worker lease.
           await boundedCommand(this.redis.eval(
             [
-              "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end",
-              "redis.call('SET', KEYS[1], 'quarantined:' .. ARGV[1])",
+              'if redis.call(\'GET\', KEYS[1]) ~= ARGV[1] then return 0 end',
+              'redis.call(\'SET\', KEYS[1], \'quarantined:\' .. ARGV[1])',
               'return 1',
             ].join('\n'),
             1,
@@ -1392,8 +1392,8 @@ export class RedisBridgeStore {
       await this.leaseCommand(
         this.redis.eval(
           [
-            "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end",
-            "redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2])",
+            'if redis.call(\'GET\', KEYS[1]) ~= ARGV[1] then return 0 end',
+            'redis.call(\'SET\', KEYS[2], ARGV[1], \'EX\', ARGV[2])',
             'return 1',
           ].join('\n'),
           2,
@@ -1422,17 +1422,17 @@ export class RedisBridgeStore {
   ): Promise<string | null> {
     const result = await this.redis.eval(
       [
-        "if ARGV[1] ~= '' then",
-        "  if redis.call('GET', KEYS[3]) ~= ARGV[1] then return nil end",
-        "elseif redis.call('EXISTS', KEYS[3]) == 1 then",
+        'if ARGV[1] ~= \'\' then',
+        '  if redis.call(\'GET\', KEYS[3]) ~= ARGV[1] then return nil end',
+        'elseif redis.call(\'EXISTS\', KEYS[3]) == 1 then',
         '  return nil',
         'end',
-        "local claimed = redis.call('GET', KEYS[2])",
+        'local claimed = redis.call(\'GET\', KEYS[2])',
         'if claimed then return claimed end',
-        "local ttl = redis.call('TTL', KEYS[1])",
-        "local assignment = redis.call('LPOP', KEYS[1])",
+        'local ttl = redis.call(\'TTL\', KEYS[1])',
+        'local assignment = redis.call(\'LPOP\', KEYS[1])',
         'if not assignment then return nil end',
-        "redis.call('SET', KEYS[2], assignment, 'EX', math.max(1, ttl))",
+        'redis.call(\'SET\', KEYS[2], assignment, \'EX\', math.max(1, ttl))',
         'return assignment',
       ].join('\n'),
       3,
@@ -1452,8 +1452,8 @@ export class RedisBridgeStore {
   ): Promise<void> {
     await this.redis.eval(
       [
-        "if redis.call('GET', KEYS[1]) == ARGV[1] then",
-        "  return redis.call('DEL', KEYS[1], KEYS[2])",
+        'if redis.call(\'GET\', KEYS[1]) == ARGV[1] then',
+        '  return redis.call(\'DEL\', KEYS[1], KEYS[2])',
         'end',
         'return 0',
       ].join('\n'),
@@ -1482,13 +1482,13 @@ export class RedisBridgeStore {
     await boundedCommand(
       this.redis.eval(
         [
-          "if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end",
-          "if redis.call('GET', KEYS[3]) ~= ARGV[1] then return 0 end",
-          "local ttl = redis.call('TTL', KEYS[1])",
-          "redis.call('DEL', KEYS[3], KEYS[4])",
-          "redis.call('LREM', KEYS[2], 0, ARGV[1])",
-          "redis.call('LPUSH', KEYS[2], ARGV[1])",
-          "if ttl > 0 then redis.call('EXPIRE', KEYS[2], ttl) end",
+          'if redis.call(\'EXISTS\', KEYS[1]) == 0 then return 0 end',
+          'if redis.call(\'GET\', KEYS[3]) ~= ARGV[1] then return 0 end',
+          'local ttl = redis.call(\'TTL\', KEYS[1])',
+          'redis.call(\'DEL\', KEYS[3], KEYS[4])',
+          'redis.call(\'LREM\', KEYS[2], 0, ARGV[1])',
+          'redis.call(\'LPUSH\', KEYS[2], ARGV[1])',
+          'if ttl > 0 then redis.call(\'EXPIRE\', KEYS[2], ttl) end',
           'return 1',
         ].join('\n'),
         4,
@@ -1528,8 +1528,8 @@ export class RedisBridgeStore {
     if (assignmentWorkspace(assignment) === undefined) return;
     await this.redis.eval(
       [
-        "if redis.call('GET', KEYS[1]) == ARGV[1] then",
-        "  return redis.call('DEL', KEYS[1])",
+        'if redis.call(\'GET\', KEYS[1]) == ARGV[1] then',
+        '  return redis.call(\'DEL\', KEYS[1])',
         'end',
         'return 0',
       ].join('\n'),
@@ -1652,24 +1652,24 @@ export class RedisBridgeStore {
       workerIncarnationKey(workerId),
     );
     const script = [
-      "local existing = redis.call('GET', KEYS[2])",
+      'local existing = redis.call(\'GET\', KEYS[2])',
       'if existing then',
       '  if existing == ARGV[1] then return 2 end',
       '  return -1',
       'end',
-      "if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end",
+      'if redis.call(\'EXISTS\', KEYS[1]) == 0 then return 0 end',
       'if ARGV[6] == "1" and redis.call(\'GET\', KEYS[6]) ~= ARGV[3] then return -2 end',
       'if ARGV[4] ~= "rejected" and redis.call(\'EXISTS\', KEYS[5]) == 0 then return -3 end',
       'local stableIdentityKey = KEYS[#KEYS - 1]',
       'if ARGV[5] ~= "" then',
-      "  if redis.call('GET', stableIdentityKey) ~= ARGV[5] then return -4 end",
-      "elseif redis.call('EXISTS', stableIdentityKey) == 1 then return -4",
+      '  if redis.call(\'GET\', stableIdentityKey) ~= ARGV[5] then return -4 end',
+      'elseif redis.call(\'EXISTS\', stableIdentityKey) == 1 then return -4',
       'end',
-      "if redis.call('GET', KEYS[#KEYS]) ~= ARGV[7] then return -4 end",
+      'if redis.call(\'GET\', KEYS[#KEYS]) ~= ARGV[7] then return -4 end',
       'redis.call(\'SET\', KEYS[2], ARGV[1], \"EX\", ARGV[2])',
-      "if redis.call('GET', KEYS[3]) == ARGV[3] then redis.call('DEL', KEYS[3], KEYS[4]) end",
+      'if redis.call(\'GET\', KEYS[3]) == ARGV[3] then redis.call(\'DEL\', KEYS[3], KEYS[4]) end',
       'if ARGV[6] == "1" and ARGV[4] == "rejected" and ARGV[8] ~= "1" then',
-      "  redis.call('DEL', KEYS[6])",
+      '  redis.call(\'DEL\', KEYS[6])',
       'end',
       'return 1',
     ].join('\n');
@@ -1859,26 +1859,26 @@ export class RedisBridgeStore {
       await this.leaseCommand(
         this.redis.eval(
           [
-            "if redis.call('HGET', KEYS[1], 'metadata') ~= ARGV[1] then return 0 end",
-            "if redis.call('HGET', KEYS[1], 'epoch') ~= ARGV[4] then return 0 end",
-            "if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end",
-            "if (redis.call('GET', KEYS[3]) or '') ~= ARGV[3] then return 0 end",
-            "if (redis.call('GET', KEYS[4]) or '0') ~= ARGV[4] then return 0 end",
+            'if redis.call(\'HGET\', KEYS[1], \'metadata\') ~= ARGV[1] then return 0 end',
+            'if redis.call(\'HGET\', KEYS[1], \'epoch\') ~= ARGV[4] then return 0 end',
+            'if redis.call(\'GET\', KEYS[2]) ~= ARGV[2] then return 0 end',
+            'if (redis.call(\'GET\', KEYS[3]) or \'\') ~= ARGV[3] then return 0 end',
+            'if (redis.call(\'GET\', KEYS[4]) or \'0\') ~= ARGV[4] then return 0 end',
             'if ARGV[8] == "1" then',
             // A completed cleanup receipt is terminal: a lost response must
             // not let a late quarantine overwrite a newer root owner.
-            "  if redis.call('HGET', KEYS[1], 'localCleanup') == '1' and redis.call('HGET', KEYS[1], 'resultCommitted') == '1' then return 1 end",
-            "  redis.call('SET', KEYS[5], 'quarantined:' .. ARGV[5])",
+            '  if redis.call(\'HGET\', KEYS[1], \'localCleanup\') == \'1\' and redis.call(\'HGET\', KEYS[1], \'resultCommitted\') == \'1\' then return 1 end',
+            '  redis.call(\'SET\', KEYS[5], \'quarantined:\' .. ARGV[5])',
             // Never replace a committed result. Before settlement, terminate the waiter.
-            "  redis.call('SET', KEYS[6], ARGV[6], 'EX', ARGV[7], 'NX')",
+            '  redis.call(\'SET\', KEYS[6], ARGV[6], \'EX\', ARGV[7], \'NX\')',
             'else',
-            "  local fence = redis.call('GET', KEYS[5])",
-            "  if fence and string.sub(fence, 1, 12) == 'quarantined:' then return 0 end",
-            "  redis.call('HSET', KEYS[1], 'localCleanup', '1')",
-            "  if redis.call('HGET', KEYS[1], 'resultCommitted') == '1' and fence == ARGV[5] then redis.call('DEL', KEYS[5]) end",
+            '  local fence = redis.call(\'GET\', KEYS[5])',
+            '  if fence and string.sub(fence, 1, 12) == \'quarantined:\' then return 0 end',
+            '  redis.call(\'HSET\', KEYS[1], \'localCleanup\', \'1\')',
+            '  if redis.call(\'HGET\', KEYS[1], \'resultCommitted\') == \'1\' and fence == ARGV[5] then redis.call(\'DEL\', KEYS[5]) end',
             'end',
-            "if redis.call('GET', KEYS[7]) == ARGV[5] then redis.call('DEL', KEYS[7]) end",
-            "if redis.call('GET', KEYS[8]) == ARGV[5] then redis.call('DEL', KEYS[8]) end",
+            'if redis.call(\'GET\', KEYS[7]) == ARGV[5] then redis.call(\'DEL\', KEYS[7]) end',
+            'if redis.call(\'GET\', KEYS[8]) == ARGV[5] then redis.call(\'DEL\', KEYS[8]) end',
             'return 1',
           ].join('\n'),
           8,
@@ -1930,10 +1930,10 @@ export class RedisBridgeStore {
       await this.leaseCommand(
         this.redis.eval(
           [
-            "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return -1 end",
-            "if redis.call('EXISTS', KEYS[2]) == 1 then return -2 end",
-            "redis.call('DEL', KEYS[3])",
-            "if redis.call('EXISTS', KEYS[4]) == 1 then redis.call('INCR', KEYS[4]) end",
+            'if redis.call(\'GET\', KEYS[1]) ~= ARGV[1] then return -1 end',
+            'if redis.call(\'EXISTS\', KEYS[2]) == 1 then return -2 end',
+            'redis.call(\'DEL\', KEYS[3])',
+            'if redis.call(\'EXISTS\', KEYS[4]) == 1 then redis.call(\'INCR\', KEYS[4]) end',
             'return 1',
           ].join('\n'),
           4,
@@ -2108,11 +2108,11 @@ export class RedisBridgeStore {
     // Keep acknowledged assignment metadata for late clean rejection recovery,
     // but atomically revoke fulfillment when no settlement has won yet.
     const closeScript = [
-      "local settlement = redis.call('GET', KEYS[2])",
+      'local settlement = redis.call(\'GET\', KEYS[2])',
       'if settlement then return settlement end',
-      "redis.call('DEL', KEYS[3])",
-      "if #KEYS == 4 and redis.call('GET', KEYS[4]) == ARGV[1] then return nil end",
-      "redis.call('DEL', KEYS[1])",
+      'redis.call(\'DEL\', KEYS[3])',
+      'if #KEYS == 4 and redis.call(\'GET\', KEYS[4]) == ARGV[1] then return nil end',
+      'redis.call(\'DEL\', KEYS[1])',
       'return nil',
     ].join('\n');
     const finalSettlement = await boundedCommand(
@@ -2158,23 +2158,23 @@ export class RedisBridgeStore {
     readyToken?: string,
   ): Promise<boolean> {
     const script = [
-      "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end",
+      'if redis.call(\'GET\', KEYS[1]) ~= ARGV[1] then return 0 end',
       'if ARGV[7] ~= "" and redis.call(\'GET\', KEYS[6]) ~= ARGV[7] then return 0 end',
-      "if #KEYS >= 7 and redis.call('EXISTS', KEYS[7]) == 1 then return -1 end",
+      'if #KEYS >= 7 and redis.call(\'EXISTS\', KEYS[7]) == 1 then return -1 end',
       'redis.call(\'SET\', KEYS[2], ARGV[2], \"EX\", ARGV[3])',
-      "redis.call('RPUSH', KEYS[3], ARGV[4])",
-      "redis.call('EXPIRE', KEYS[3], ARGV[3])",
+      'redis.call(\'RPUSH\', KEYS[3], ARGV[4])',
+      'redis.call(\'EXPIRE\', KEYS[3], ARGV[3])',
       ...(assignment.workspaceLeaseSlot === undefined
         ? ['redis.call(\'SET\', KEYS[4], ARGV[1], \"PX\", ARGV[5])']
         : []),
       'redis.call(\'SET\', KEYS[5], "1", \"PXAT\", ARGV[6])',
-      "if #KEYS >= 7 then redis.call('SET', KEYS[7], ARGV[4]) end",
+      'if #KEYS >= 7 then redis.call(\'SET\', KEYS[7], ARGV[4]) end',
       'if #KEYS == 9 then',
-      "  local epoch = redis.call('GET', KEYS[9])",
-      "  if type(epoch) ~= 'string' then epoch = '0'; redis.call('SET', KEYS[9], epoch, 'EX', ARGV[3]) end",
-      "  if redis.call('PTTL', KEYS[9]) < tonumber(ARGV[3]) * 1000 then redis.call('EXPIRE', KEYS[9], ARGV[3]) end",
-      "  redis.call('HSET', KEYS[8], 'metadata', ARGV[8], 'epoch', epoch)",
-      "  redis.call('EXPIRE', KEYS[8], ARGV[3])",
+      '  local epoch = redis.call(\'GET\', KEYS[9])',
+      '  if type(epoch) ~= \'string\' then epoch = \'0\'; redis.call(\'SET\', KEYS[9], epoch, \'EX\', ARGV[3]) end',
+      '  if redis.call(\'PTTL\', KEYS[9]) < tonumber(ARGV[3]) * 1000 then redis.call(\'EXPIRE\', KEYS[9], ARGV[3]) end',
+      '  redis.call(\'HSET\', KEYS[8], \'metadata\', ARGV[8], \'epoch\', epoch)',
+      '  redis.call(\'EXPIRE\', KEYS[8], ARGV[3])',
       'end',
       'return 1',
     ].join('\n');
@@ -2270,10 +2270,10 @@ export class RedisBridgeStore {
       this.cancel(assignmentId, assignment),
       assignment == null
         ? boundedCommand(
-            this.releaseLock(workerId, assignmentId),
-            this.redisCommandTimeoutMs,
-            'Bridge assignment lock release',
-          )
+          this.releaseLock(workerId, assignmentId),
+          this.redisCommandTimeoutMs,
+          'Bridge assignment lock release',
+        )
         : this.cleanup(assignment),
     ]);
   }
@@ -2310,9 +2310,9 @@ export class RedisBridgeStore {
         await boundedCommand(
           this.redis.eval(
             [
-              "if redis.call('EXISTS', KEYS[2]) == 0 then return 0 end",
-              "redis.call('HSET', KEYS[2], 'resultCommitted', '1')",
-              "if redis.call('HGET', KEYS[2], 'localCleanup') == '1' and redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('DEL', KEYS[1]) end",
+              'if redis.call(\'EXISTS\', KEYS[2]) == 0 then return 0 end',
+              'redis.call(\'HSET\', KEYS[2], \'resultCommitted\', \'1\')',
+              'if redis.call(\'HGET\', KEYS[2], \'localCleanup\') == \'1\' and redis.call(\'GET\', KEYS[1]) == ARGV[1] then redis.call(\'DEL\', KEYS[1]) end',
               'return 1',
             ].join('\n'),
             2,
@@ -2342,8 +2342,8 @@ export class RedisBridgeStore {
     }
     const runtimeSessionId = assignmentWorkspace(assignment)!;
     const script = [
-      "if redis.call('GET', KEYS[1]) == ARGV[1] then",
-      "  return redis.call('DEL', KEYS[1])",
+      'if redis.call(\'GET\', KEYS[1]) == ARGV[1] then',
+      '  return redis.call(\'DEL\', KEYS[1])',
       'end',
       'return 0',
     ].join('\n');
@@ -2408,19 +2408,19 @@ export class RedisBridgeStore {
       assignmentWorkspace(assignment) === undefined
         ? `${assignmentKey(assignment.assignmentId)}:no-workspace`
         : workspaceQuarantineKey(
-            assignment.workerId,
+          assignment.workerId,
             assignmentWorkspace(assignment)!,
-          ),
+        ),
     ];
     const cleanupScript = [
-      "local queued = redis.call('LREM', KEYS[2], 0, ARGV[1])",
-      "local claimed = redis.call('GET', KEYS[3]) == ARGV[1]",
-      "local acknowledged = redis.call('GET', KEYS[4]) == ARGV[1]",
+      'local queued = redis.call(\'LREM\', KEYS[2], 0, ARGV[1])',
+      'local claimed = redis.call(\'GET\', KEYS[3]) == ARGV[1]',
+      'local acknowledged = redis.call(\'GET\', KEYS[4]) == ARGV[1]',
       'if ARGV[2] == "1" and (queued > 0 or (claimed and not acknowledged)) and redis.call(\'GET\', KEYS[5]) == ARGV[1] then',
-      "  redis.call('DEL', KEYS[5])",
+      '  redis.call(\'DEL\', KEYS[5])',
       'end',
       'if claimed and not acknowledged then',
-      "  redis.call('DEL', KEYS[3], KEYS[4])",
+      '  redis.call(\'DEL\', KEYS[3], KEYS[4])',
       'end',
       'if ARGV[3] == "1" and redis.call(\'GET\', KEYS[5]) == ARGV[1] then return -1 end',
       'if queued == 0 and acknowledged and ARGV[2] == "1" and redis.call(\'GET\', KEYS[5]) == ARGV[1] then',
@@ -2428,9 +2428,9 @@ export class RedisBridgeStore {
       'end',
       // A delayed cleanup can outlive its lock. Never erase the next
       // assignment's claim or acknowledgement when that happens.
-      "if claimed then redis.call('DEL', KEYS[3]) end",
-      "if acknowledged then redis.call('DEL', KEYS[4]) end",
-      "return redis.call('DEL', KEYS[1])",
+      'if claimed then redis.call(\'DEL\', KEYS[3]) end',
+      'if acknowledged then redis.call(\'DEL\', KEYS[4]) end',
+      'return redis.call(\'DEL\', KEYS[1])',
     ].join('\n');
     const cleanupResult = Number(
       await boundedCommand(
@@ -2451,10 +2451,10 @@ export class RedisBridgeStore {
         assignment.workspaceLeaseSlot === undefined
           ? this.releaseLock(assignment.workerId, assignment.assignmentId)
           : new BridgeWorkspaceSlots(this.redis).release(
-              assignment.workerId,
-              assignment.incarnationId,
-              assignment.assignmentId,
-            ),
+            assignment.workerId,
+            assignment.incarnationId,
+            assignment.assignmentId,
+          ),
         this.redisCommandTimeoutMs,
         'Bridge assignment lock release',
       );

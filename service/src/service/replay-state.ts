@@ -31,9 +31,9 @@ import type * as t from '../types';
 import type { RedisClient } from '../redis-connection';
 import type { LCTool } from '../preamble';
 import type {
-    ExecutionProfile,
-    ExecutionProfileSource,
-    SandboxBackendName,
+  ExecutionProfile,
+  ExecutionProfileSource,
+  SandboxBackendName,
 } from '../execution-profile';
 import { connection } from '../queue';
 import { env } from '../config';
@@ -41,9 +41,9 @@ import { hashTag, scanKeys, stripHashTag } from '../redis-connection';
 import { internalServiceHeaders } from '../internal-service-auth';
 import logger from '../logger';
 import {
-    ptcReplayHistorySize,
-    ptcReplayHistoryEntries,
-    ptcReplayStaleCleanups,
+  ptcReplayHistorySize,
+  ptcReplayHistoryEntries,
+  ptcReplayStaleCleanups,
 } from '../metrics';
 
 // ---------------------------------------------------------------------------
@@ -67,8 +67,8 @@ export const MAX_EXECUTION_STATE_BYTES = 10_000_000;
  * would be able to mutate `tool_history`/`exec_state` concurrently. Floor
  * at 10 minutes so short job timeouts don't produce a tiny lock window. */
 export const REPLAY_LOCK_TTL_MS = Math.max(
-    10 * 60 * 1000,
-    env.JOB_TIMEOUT * 2 + 30_000
+  10 * 60 * 1000,
+  env.JOB_TIMEOUT * 2 + 30_000
 );
 
 /** Per-entry cap for a single serialized tool result (JSON bytes). Keeps the
@@ -221,16 +221,16 @@ export interface ToolHistoryDelta {
  * valid request, which is a client/input sizing problem, not a server
  * failure. */
 export class ExecutionStateTooLargeError extends Error {
-    readonly bytes: number;
-    readonly cap: number;
-    constructor(execution_id: string, bytes: number, cap: number) {
-        super(
-            `ExecutionState for ${execution_id} is ${bytes} bytes, exceeds cap ${cap}`
-        );
-        this.name = 'ExecutionStateTooLargeError';
-        this.bytes = bytes;
-        this.cap = cap;
-    }
+  readonly bytes: number;
+  readonly cap: number;
+  constructor(execution_id: string, bytes: number, cap: number) {
+    super(
+      `ExecutionState for ${execution_id} is ${bytes} bytes, exceeds cap ${cap}`
+    );
+    this.name = 'ExecutionStateTooLargeError';
+    this.bytes = bytes;
+    this.cap = cap;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -272,33 +272,33 @@ type RedisWithScripts = RedisClient & {
 const SCRIPTS_REGISTERED = Symbol.for('replay-state.scriptsRegistered');
 
 function registerScripts(client: RedisClient): RedisWithScripts {
-    const tagged = client as RedisClient & { [SCRIPTS_REGISTERED]?: true };
-    if (tagged[SCRIPTS_REGISTERED]) return client as RedisWithScripts;
-    client.defineCommand('releaseExecutionLockScript', {
-        numberOfKeys: 1,
-        lua: "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-    });
-    client.defineCommand('setExecutionResultScript', {
-        numberOfKeys: 2,
-        lua: `if redis.call('exists', KEYS[1]) == 1 then
+  const tagged = client as RedisClient & { [SCRIPTS_REGISTERED]?: true };
+  if (tagged[SCRIPTS_REGISTERED]) return client as RedisWithScripts;
+  client.defineCommand('releaseExecutionLockScript', {
+    numberOfKeys: 1,
+    lua: 'if redis.call(\'get\', KEYS[1]) == ARGV[1] then return redis.call(\'del\', KEYS[1]) else return 0 end',
+  });
+  client.defineCommand('setExecutionResultScript', {
+    numberOfKeys: 2,
+    lua: `if redis.call('exists', KEYS[1]) == 1 then
   redis.call('set', KEYS[1], ARGV[1], 'EX', ARGV[3])
   redis.call('set', KEYS[2], ARGV[2], 'EX', ARGV[3])
   return 1
 else
   return 0
 end`,
-    });
-    client.defineCommand('setExecutionErrorScript', {
-        numberOfKeys: 1,
-        lua: `if redis.call('exists', KEYS[1]) == 1 then
+  });
+  client.defineCommand('setExecutionErrorScript', {
+    numberOfKeys: 1,
+    lua: `if redis.call('exists', KEYS[1]) == 1 then
   redis.call('set', KEYS[1], ARGV[1], 'EX', ARGV[2])
   return 1
 else
   return 0
 end`,
-    });
-    tagged[SCRIPTS_REGISTERED] = true;
-    return client as RedisWithScripts;
+  });
+  tagged[SCRIPTS_REGISTERED] = true;
+  return client as RedisWithScripts;
 }
 
 /** Module-level Redis handle. Defaults to the shared queue connection so
@@ -312,13 +312,13 @@ let redis: RedisWithScripts = registerScripts(connection);
  * `setRedisForTests`/`resetRedisForTests` lets a test suite isolate per-test
  * keyspaces by handing in fresh mock instances. */
 export function setRedisForTests(client: RedisClient): void {
-    redis = registerScripts(client);
+  redis = registerScripts(client);
 }
 
 /** Restore the production Redis handle. Useful after a test suite finishes
  * so accidental reuse doesn't leak a closed mock connection. */
 export function resetRedisForTests(): void {
-    redis = registerScripts(connection);
+  redis = registerScripts(connection);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,44 +329,44 @@ export function resetRedisForTests(): void {
  *  key; normalize on read. Safe to delete one EXECUTION_STATE_TTL window
  *  after the external_user_id rollout. */
 export function normalizeExecutionState(state: ExecutionState): ExecutionState {
-    const legacy = (state as unknown as Record<string, unknown>)['chcUserId']; // leak-check:allow
-    if (state.externalUserId == null && typeof legacy === 'string') {
-        state.externalUserId = legacy;
-    }
-    return state;
+  const legacy = (state as unknown as Record<string, unknown>)['chcUserId']; // leak-check:allow
+  if (state.externalUserId == null && typeof legacy === 'string') {
+    state.externalUserId = legacy;
+  }
+  return state;
 }
 
 export async function getExecutionState(
-    execution_id: string
+  execution_id: string
 ): Promise<ExecutionState | null> {
-    const data = await redis.get(`exec_state:${hashTag(execution_id)}`);
-    return data != null
-        ? normalizeExecutionState(JSON.parse(data) as ExecutionState)
-        : null;
+  const data = await redis.get(`exec_state:${hashTag(execution_id)}`);
+  return data != null
+    ? normalizeExecutionState(JSON.parse(data) as ExecutionState)
+    : null;
 }
 
 export async function setExecutionState(state: ExecutionState): Promise<void> {
-    const serialized = JSON.stringify(state);
-    const serializedBytes = Buffer.byteLength(serialized, 'utf8');
-    if (serializedBytes > MAX_EXECUTION_STATE_BYTES) {
-        throw new ExecutionStateTooLargeError(
-            state.execution_id,
-            serializedBytes,
-            MAX_EXECUTION_STATE_BYTES
-        );
-    }
-    await redis.set(
-        `exec_state:${hashTag(state.execution_id)}`,
-        serialized,
-        'EX',
-        EXECUTION_STATE_TTL
+  const serialized = JSON.stringify(state);
+  const serializedBytes = Buffer.byteLength(serialized, 'utf8');
+  if (serializedBytes > MAX_EXECUTION_STATE_BYTES) {
+    throw new ExecutionStateTooLargeError(
+      state.execution_id,
+      serializedBytes,
+      MAX_EXECUTION_STATE_BYTES
     );
+  }
+  await redis.set(
+    `exec_state:${hashTag(state.execution_id)}`,
+    serialized,
+    'EX',
+    EXECUTION_STATE_TTL
+  );
 }
 
 export async function deleteExecutionState(
-    execution_id: string
+  execution_id: string
 ): Promise<void> {
-    await redis.del(`exec_state:${hashTag(execution_id)}`);
+  await redis.del(`exec_state:${hashTag(execution_id)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -379,31 +379,31 @@ export async function deleteExecutionState(
  * another request holds the lock. Prevents TOCTOU on concurrent continuations.
  */
 export async function acquireExecutionLock(
-    execution_id: string
+  execution_id: string
 ): Promise<string | null> {
-    const token = nanoid();
-    const result = await redis.set(
-        `exec_lock:${hashTag(execution_id)}`,
-        token,
-        'PX',
-        REPLAY_LOCK_TTL_MS,
-        'NX'
-    );
-    return result === 'OK' ? token : null;
+  const token = nanoid();
+  const result = await redis.set(
+    `exec_lock:${hashTag(execution_id)}`,
+    token,
+    'PX',
+    REPLAY_LOCK_TTL_MS,
+    'NX'
+  );
+  return result === 'OK' ? token : null;
 }
 
 export async function releaseExecutionLock(
-    execution_id: string,
-    token: string
+  execution_id: string,
+  token: string
 ): Promise<void> {
-    try {
-        await redis.releaseExecutionLockScript(
-            `exec_lock:${hashTag(execution_id)}`,
-            token
-        );
-    } catch (err) {
-        logger.warn('Failed to release exec lock', { execution_id, err });
-    }
+  try {
+    await redis.releaseExecutionLockScript(
+      `exec_lock:${hashTag(execution_id)}`,
+      token
+    );
+  } catch (err) {
+    logger.warn('Failed to release exec lock', { execution_id, err });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -421,32 +421,32 @@ export async function releaseExecutionLock(
  * on the lighter `exec_state:` blob the replay path mutates on every
  * continuation. */
 function blockingResultKey(execution_id: string): string {
-    return `exec_result:${hashTag(execution_id)}`;
+  return `exec_result:${hashTag(execution_id)}`;
 }
 
 export async function setBlockingResult(
-    execution_id: string,
-    result: t.ExecuteResult
+  execution_id: string,
+  result: t.ExecuteResult
 ): Promise<void> {
-    await redis.set(
-        blockingResultKey(execution_id),
-        JSON.stringify(result),
-        'EX',
-        EXECUTION_STATE_TTL
-    );
+  await redis.set(
+    blockingResultKey(execution_id),
+    JSON.stringify(result),
+    'EX',
+    EXECUTION_STATE_TTL
+  );
 }
 
 export async function getBlockingResult(
-    execution_id: string
+  execution_id: string
 ): Promise<t.ExecuteResult | null> {
-    const data = await redis.get(blockingResultKey(execution_id));
-    return data != null ? (JSON.parse(data) as t.ExecuteResult) : null;
+  const data = await redis.get(blockingResultKey(execution_id));
+  return data != null ? (JSON.parse(data) as t.ExecuteResult) : null;
 }
 
 export async function deleteBlockingResult(
-    execution_id: string
+  execution_id: string
 ): Promise<void> {
-    await redis.del(blockingResultKey(execution_id));
+  await redis.del(blockingResultKey(execution_id));
 }
 
 /** Persist the terminal result of a blocking execution.
@@ -465,70 +465,70 @@ export async function deleteBlockingResult(
  * and the result blob in a single hop. If cleanup has already removed the
  * state, the entire update is skipped. */
 export async function setExecutionResult(
-    execution_id: string,
-    result: t.ExecuteResult
+  execution_id: string,
+  result: t.ExecuteResult
 ): Promise<void> {
-    const stateKey = `exec_state:${hashTag(execution_id)}`;
-    const resultKey = `exec_result:${hashTag(execution_id)}`;
-    const existing = await getExecutionState(execution_id);
-    if (!existing) return;
-    const updated: ExecutionState = {
-        ...existing,
-        jobCompleted: true,
-        jobResult: undefined,
-    };
-    const updatedSerialized = JSON.stringify(updated);
-    if (
-        Buffer.byteLength(updatedSerialized, 'utf8') > MAX_EXECUTION_STATE_BYTES
-    ) {
-        throw new ExecutionStateTooLargeError(
-            execution_id,
-            Buffer.byteLength(updatedSerialized, 'utf8'),
-            MAX_EXECUTION_STATE_BYTES
-        );
-    }
-    /** EXISTS-then-SET both keys atomically so a concurrent
+  const stateKey = `exec_state:${hashTag(execution_id)}`;
+  const resultKey = `exec_result:${hashTag(execution_id)}`;
+  const existing = await getExecutionState(execution_id);
+  if (!existing) return;
+  const updated: ExecutionState = {
+    ...existing,
+    jobCompleted: true,
+    jobResult: undefined,
+  };
+  const updatedSerialized = JSON.stringify(updated);
+  if (
+    Buffer.byteLength(updatedSerialized, 'utf8') > MAX_EXECUTION_STATE_BYTES
+  ) {
+    throw new ExecutionStateTooLargeError(
+      execution_id,
+      Buffer.byteLength(updatedSerialized, 'utf8'),
+      MAX_EXECUTION_STATE_BYTES
+    );
+  }
+  /** EXISTS-then-SET both keys atomically so a concurrent
      * `cleanupExecution` racing between our `getExecutionState` above and
      * the writes below cannot leave an orphan blob behind. The Lua body
      * is registered on the client via `defineCommand`. */
-    await redis.setExecutionResultScript(
-        stateKey,
-        resultKey,
-        updatedSerialized,
-        JSON.stringify(result),
-        String(EXECUTION_STATE_TTL)
-    );
+  await redis.setExecutionResultScript(
+    stateKey,
+    resultKey,
+    updatedSerialized,
+    JSON.stringify(result),
+    String(EXECUTION_STATE_TTL)
+  );
 }
 
 export async function setExecutionError(
-    execution_id: string,
-    error: Error
+  execution_id: string,
+  error: Error
 ): Promise<void> {
-    const stateKey = `exec_state:${hashTag(execution_id)}`;
-    const existing = await getExecutionState(execution_id);
-    if (!existing) return;
-    const updated: ExecutionState = {
-        ...existing,
-        jobCompleted: true,
-        jobError: error.message,
-    };
-    const serialized = JSON.stringify(updated);
-    if (Buffer.byteLength(serialized, 'utf8') > MAX_EXECUTION_STATE_BYTES) {
-        throw new ExecutionStateTooLargeError(
-            execution_id,
-            Buffer.byteLength(serialized, 'utf8'),
-            MAX_EXECUTION_STATE_BYTES
-        );
-    }
-    /** Same race window as `setExecutionResult`: a `cleanupExecution`
+  const stateKey = `exec_state:${hashTag(execution_id)}`;
+  const existing = await getExecutionState(execution_id);
+  if (!existing) return;
+  const updated: ExecutionState = {
+    ...existing,
+    jobCompleted: true,
+    jobError: error.message,
+  };
+  const serialized = JSON.stringify(updated);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_EXECUTION_STATE_BYTES) {
+    throw new ExecutionStateTooLargeError(
+      execution_id,
+      Buffer.byteLength(serialized, 'utf8'),
+      MAX_EXECUTION_STATE_BYTES
+    );
+  }
+  /** Same race window as `setExecutionResult`: a `cleanupExecution`
      * winning between our `getExecutionState` and the write would
      * otherwise resurrect torn-down state. The conditional SET makes
      * the write a no-op once the execution has been cleaned up. */
-    await redis.setExecutionErrorScript(
-        stateKey,
-        serialized,
-        String(EXECUTION_STATE_TTL)
-    );
+  await redis.setExecutionErrorScript(
+    stateKey,
+    serialized,
+    String(EXECUTION_STATE_TTL)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -536,7 +536,7 @@ export async function setExecutionError(
 // ---------------------------------------------------------------------------
 
 export function historyKey(execution_id: string): string {
-    return `tool_history:${hashTag(execution_id)}`;
+  return `tool_history:${hashTag(execution_id)}`;
 }
 
 /** Canonical byte-comparable form of the "semantic" fields of a history
@@ -546,15 +546,15 @@ export function historyKey(execution_id: string): string {
  * which is sufficient for checking equality of payloads produced from
  * the same client-supplied object. */
 function canonicalEntryBody(
-    result: unknown,
-    isError: boolean | undefined,
-    errorMessage: string | undefined
+  result: unknown,
+  isError: boolean | undefined,
+  errorMessage: string | undefined
 ): string {
-    return JSON.stringify({
-        result,
-        is_error: isError ?? false,
-        error_message: errorMessage,
-    });
+  return JSON.stringify({
+    result,
+    is_error: isError ?? false,
+    error_message: errorMessage,
+  });
 }
 
 /** Compute the delta between an incoming result batch and the persisted
@@ -577,8 +577,8 @@ function canonicalEntryBody(
  *    409-style mismatch error and no Redis mutation is attempted.
  */
 export async function computeToolHistoryDelta(
-    execution_id: string,
-    results: Array<{
+  execution_id: string,
+  results: Array<{
         call_id: string;
         result: unknown;
         is_error?: boolean;
@@ -588,82 +588,82 @@ export async function computeToolHistoryDelta(
         call_site?: string;
     }>
 ): Promise<ToolHistoryDelta | { error: string; status?: number }> {
-    const serializedByCallId = new Map<string, string>();
-    if (results.length === 0) {
-        return { serializedByCallId, newCallIds: [], bytesDelta: 0 };
-    }
-    const key = historyKey(execution_id);
-    const callIds = results.map(r => r.call_id);
-    const existingRaw =
+  const serializedByCallId = new Map<string, string>();
+  if (results.length === 0) {
+    return { serializedByCallId, newCallIds: [], bytesDelta: 0 };
+  }
+  const key = historyKey(execution_id);
+  const callIds = results.map(r => r.call_id);
+  const existingRaw =
         callIds.length > 0 ? await redis.hmget(key, ...callIds) : [];
-    const oldByCallId = new Map<
+  const oldByCallId = new Map<
         string,
         { entry: HistoryEntry; bytes: number }
     >();
-    for (let i = 0; i < callIds.length; i++) {
-        const raw = existingRaw[i];
-        if (typeof raw !== 'string') continue;
-        try {
-            const parsed = JSON.parse(raw) as HistoryEntry;
-            oldByCallId.set(callIds[i], {
-                entry: parsed,
-                bytes: Buffer.byteLength(raw, 'utf8'),
-            });
-        } catch {
-            logger.warn(
-                'Malformed existing tool_history entry; treating as absent',
-                {
-                    execution_id,
-                    call_id: callIds[i],
-                }
-            );
+  for (let i = 0; i < callIds.length; i++) {
+    const raw = existingRaw[i];
+    if (typeof raw !== 'string') continue;
+    try {
+      const parsed = JSON.parse(raw) as HistoryEntry;
+      oldByCallId.set(callIds[i], {
+        entry: parsed,
+        bytes: Buffer.byteLength(raw, 'utf8'),
+      });
+    } catch {
+      logger.warn(
+        'Malformed existing tool_history entry; treating as absent',
+        {
+          execution_id,
+          call_id: callIds[i],
         }
+      );
     }
-    const now = Date.now();
-    const newCallIds: string[] = [];
-    let bytesDelta = 0;
-    for (const r of results) {
-        const entry: HistoryEntry = {
-            result: r.result,
-            is_error: r.is_error ?? false,
-            error_message: r.error_message,
-            received_at: now,
-            tool_name: r.tool_name,
-            input_hash: r.input_hash,
-            call_site: r.call_site,
+  }
+  const now = Date.now();
+  const newCallIds: string[] = [];
+  let bytesDelta = 0;
+  for (const r of results) {
+    const entry: HistoryEntry = {
+      result: r.result,
+      is_error: r.is_error ?? false,
+      error_message: r.error_message,
+      received_at: now,
+      tool_name: r.tool_name,
+      input_hash: r.input_hash,
+      call_site: r.call_site,
+    };
+    const serialized = JSON.stringify(entry);
+    const newBytes = Buffer.byteLength(serialized, 'utf8');
+    if (newBytes > MAX_TOOL_RESULT_BYTES) {
+      return {
+        error: `tool_results[${r.call_id}] serialized entry is ${newBytes} bytes, exceeds per-entry cap ${MAX_TOOL_RESULT_BYTES}`,
+      };
+    }
+    const existing = oldByCallId.get(r.call_id);
+    if (existing) {
+      const incomingBody = canonicalEntryBody(
+        r.result,
+        r.is_error,
+        r.error_message
+      );
+      const storedBody = canonicalEntryBody(
+        existing.entry.result,
+        existing.entry.is_error,
+        existing.entry.error_message
+      );
+      if (incomingBody !== storedBody) {
+        return {
+          status: 409,
+          error: `tool_results[${r.call_id}] has already been recorded with a different payload; replay history is immutable`,
         };
-        const serialized = JSON.stringify(entry);
-        const newBytes = Buffer.byteLength(serialized, 'utf8');
-        if (newBytes > MAX_TOOL_RESULT_BYTES) {
-            return {
-                error: `tool_results[${r.call_id}] serialized entry is ${newBytes} bytes, exceeds per-entry cap ${MAX_TOOL_RESULT_BYTES}`,
-            };
-        }
-        const existing = oldByCallId.get(r.call_id);
-        if (existing) {
-            const incomingBody = canonicalEntryBody(
-                r.result,
-                r.is_error,
-                r.error_message
-            );
-            const storedBody = canonicalEntryBody(
-                existing.entry.result,
-                existing.entry.is_error,
-                existing.entry.error_message
-            );
-            if (incomingBody !== storedBody) {
-                return {
-                    status: 409,
-                    error: `tool_results[${r.call_id}] has already been recorded with a different payload; replay history is immutable`,
-                };
-            }
-            continue;
-        }
-        serializedByCallId.set(r.call_id, serialized);
-        newCallIds.push(r.call_id);
-        bytesDelta += newBytes;
+      }
+      continue;
     }
-    return { serializedByCallId, newCallIds, bytesDelta };
+    serializedByCallId.set(r.call_id, serialized);
+    newCallIds.push(r.call_id);
+    bytesDelta += newBytes;
+  }
+  return { serializedByCallId, newCallIds, bytesDelta };
 }
 
 /** Commit a previously-computed history delta AND the updated execution
@@ -674,33 +674,33 @@ export async function computeToolHistoryDelta(
  * blob must already be validated against `MAX_EXECUTION_STATE_BYTES`
  * before this is called; failure is logged and propagated. */
 export async function commitToolHistoryAndState(
-    state: ExecutionState,
-    delta: ToolHistoryDelta
+  state: ExecutionState,
+  delta: ToolHistoryDelta
 ): Promise<void> {
-    const serialized = JSON.stringify(state);
-    const serializedBytes = Buffer.byteLength(serialized, 'utf8');
-    if (serializedBytes > MAX_EXECUTION_STATE_BYTES) {
-        /** Use the typed error so the continuation handler can distinguish
+  const serialized = JSON.stringify(state);
+  const serializedBytes = Buffer.byteLength(serialized, 'utf8');
+  if (serializedBytes > MAX_EXECUTION_STATE_BYTES) {
+    /** Use the typed error so the continuation handler can distinguish
          * a sizing problem (-> 413) from a generic Redis transaction failure
          * (-> 503). A plain `Error` here would bubble through to the top-level
          * router catch as an opaque 500. */
-        throw new ExecutionStateTooLargeError(
-            state.execution_id,
-            serializedBytes,
-            MAX_EXECUTION_STATE_BYTES
-        );
+    throw new ExecutionStateTooLargeError(
+      state.execution_id,
+      serializedBytes,
+      MAX_EXECUTION_STATE_BYTES
+    );
+  }
+  const hKey = historyKey(state.execution_id);
+  const sKey = `exec_state:${hashTag(state.execution_id)}`;
+  const tx = redis.multi();
+  if (delta.serializedByCallId.size > 0) {
+    const kvs: string[] = [];
+    for (const [callId, s] of delta.serializedByCallId) {
+      kvs.push(callId, s);
     }
-    const hKey = historyKey(state.execution_id);
-    const sKey = `exec_state:${hashTag(state.execution_id)}`;
-    const tx = redis.multi();
-    if (delta.serializedByCallId.size > 0) {
-        const kvs: string[] = [];
-        for (const [callId, s] of delta.serializedByCallId) {
-            kvs.push(callId, s);
-        }
-        tx.hset(hKey, ...kvs);
-    }
-    /** Refresh the history-hash TTL on every commit, including idempotent
+    tx.hset(hKey, ...kvs);
+  }
+  /** Refresh the history-hash TTL on every commit, including idempotent
      * retries where `delta.serializedByCallId` is empty. Without this, a
      * retry near TTL expiry renews `exec_state` (via the `SET EX` below)
      * but leaves `tool_history` on its original expiry; a slow next
@@ -708,26 +708,26 @@ export async function commitToolHistoryAndState(
      * subsequent continuations to load an empty history and re-emit
      * already-resolved tool calls. `EXPIRE` on a missing hash is a safe
      * no-op. */
-    tx.expire(hKey, EXECUTION_STATE_TTL);
-    tx.set(sKey, serialized, 'EX', EXECUTION_STATE_TTL);
-    const results = await tx.exec();
-    if (!results) {
-        throw new Error(
-            `Redis transaction aborted for execution ${state.execution_id}`
-        );
+  tx.expire(hKey, EXECUTION_STATE_TTL);
+  tx.set(sKey, serialized, 'EX', EXECUTION_STATE_TTL);
+  const results = await tx.exec();
+  if (!results) {
+    throw new Error(
+      `Redis transaction aborted for execution ${state.execution_id}`
+    );
+  }
+  for (const [err] of results) {
+    if (err) {
+      throw err;
     }
-    for (const [err] of results) {
-        if (err) {
-            throw err;
-        }
-    }
-    /** Observe the size and entry-count of the persisted history *after*
+  }
+  /** Observe the size and entry-count of the persisted history *after*
      * commit succeeds so failed commits don't pollute the histogram with
      * sizes that never made it to Redis. `historyBytes` and `callCount`
      * have already been advanced on `state` to reflect the post-commit
      * truth, so they're the right values to record. */
-    ptcReplayHistorySize.observe(state.historyBytes ?? 0);
-    ptcReplayHistoryEntries.observe(state.callCount ?? 0);
+  ptcReplayHistorySize.observe(state.historyBytes ?? 0);
+  ptcReplayHistoryEntries.observe(state.callCount ?? 0);
 }
 
 /** Extend the Redis TTL on both the execution-state blob and the tool-history
@@ -735,35 +735,35 @@ export async function commitToolHistoryAndState(
  * still valid but prior tool results have already expired, which would force
  * the sandbox to re-emit earlier calls on replay. */
 export async function refreshExecutionTtl(execution_id: string): Promise<void> {
-    await Promise.all([
-        redis.expire(
-            `exec_state:${hashTag(execution_id)}`,
-            EXECUTION_STATE_TTL
-        ),
-        redis.expire(historyKey(execution_id), EXECUTION_STATE_TTL),
-    ]);
+  await Promise.all([
+    redis.expire(
+      `exec_state:${hashTag(execution_id)}`,
+      EXECUTION_STATE_TTL
+    ),
+    redis.expire(historyKey(execution_id), EXECUTION_STATE_TTL),
+  ]);
 }
 
 export async function loadToolHistory(
-    execution_id: string
+  execution_id: string
 ): Promise<Record<string, HistoryEntry>> {
-    const raw = await redis.hgetall(historyKey(execution_id));
-    const out: Record<string, HistoryEntry> = {};
-    for (const [k, v] of Object.entries(raw)) {
-        try {
-            out[k] = JSON.parse(v) as HistoryEntry;
-        } catch {
-            logger.warn('Dropping malformed tool_history entry', {
-                execution_id,
-                call_id: k,
-            });
-        }
+  const raw = await redis.hgetall(historyKey(execution_id));
+  const out: Record<string, HistoryEntry> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    try {
+      out[k] = JSON.parse(v) as HistoryEntry;
+    } catch {
+      logger.warn('Dropping malformed tool_history entry', {
+        execution_id,
+        call_id: k,
+      });
     }
-    return out;
+  }
+  return out;
 }
 
 export async function deleteToolHistory(execution_id: string): Promise<void> {
-    await redis.del(historyKey(execution_id));
+  await redis.del(historyKey(execution_id));
 }
 
 // ---------------------------------------------------------------------------
@@ -777,39 +777,39 @@ export async function deleteToolHistory(execution_id: string): Promise<void> {
 const CLEANUP_BATCH_SIZE = 200;
 
 export async function cleanupStaleExecutions(): Promise<number> {
-    try {
-        const keys = await scanKeys(
-            redis,
-            'exec_state:*',
-            200,
-            SCAN_KEYS_DEFAULT_LIMIT
-        );
-        if (keys.length === 0) return 0;
-        const now = Date.now();
-        let cleaned = 0;
+  try {
+    const keys = await scanKeys(
+      redis,
+      'exec_state:*',
+      200,
+      SCAN_KEYS_DEFAULT_LIMIT
+    );
+    if (keys.length === 0) return 0;
+    const now = Date.now();
+    let cleaned = 0;
 
-        /** Batch the per-key state reads via `MGET` so a sweep over many
+    /** Batch the per-key state reads via `MGET` so a sweep over many
          * exec_state keys completes in O(keys / batch) Redis round-trips
          * rather than O(keys) sequential `GET`s. The decision-and-delete
          * step still iterates per-execution because the deletes (history,
          * blocking result, tool_call_server session, exec_state key) are
          * heterogeneous and each touches different Redis keyspaces. */
-        for (
-            let offset = 0;
-            offset < keys.length;
-            offset += CLEANUP_BATCH_SIZE
-        ) {
-            const batchKeys = keys.slice(offset, offset + CLEANUP_BATCH_SIZE);
-            const values = await redis.mget(...batchKeys);
-            for (let i = 0; i < batchKeys.length; i++) {
-                const data = values[i];
-                if (data == null) continue;
+    for (
+      let offset = 0;
+      offset < keys.length;
+      offset += CLEANUP_BATCH_SIZE
+    ) {
+      const batchKeys = keys.slice(offset, offset + CLEANUP_BATCH_SIZE);
+      const values = await redis.mget(...batchKeys);
+      for (let i = 0; i < batchKeys.length; i++) {
+        const data = values[i];
+        if (data == null) continue;
 
-                let state: ExecutionState;
-                try {
-                    state = JSON.parse(data) as ExecutionState;
-                } catch {
-                    /** Malformed JSON in `exec_state:<id>` (corrupt write or partial
+        let state: ExecutionState;
+        try {
+          state = JSON.parse(data) as ExecutionState;
+        } catch {
+          /** Malformed JSON in `exec_state:<id>` (corrupt write or partial
                      * legacy migration) — drop it AND its sibling `tool_history` /
                      * `exec_result` keys instead of breaking the whole sweep.
                      * Earlier we only dropped `exec_state` here, leaving siblings
@@ -823,109 +823,109 @@ export async function cleanupStaleExecutions(): Promise<number> {
                      * of malformed keys (corrupt writes, mid-deploy migrations) is
                      * visible to operators via both `ptc_replay_stale_cleanups_total`
                      * and structured logs, instead of silently disappearing. */
-                    const orphanId = stripHashTag(
-                        batchKeys[i].slice('exec_state:'.length)
-                    );
-                    logger.warn(
-                        'Reaping malformed exec_state and sibling keys',
-                        {
-                            execution_id: orphanId,
-                        }
-                    );
-                    await Promise.all([
-                        redis.del(batchKeys[i]),
-                        deleteToolHistory(orphanId),
-                        deleteBlockingResult(orphanId),
-                    ]).catch(err => {
-                        logger.warn(
-                            'Sibling delete failed during malformed-key cleanup',
-                            {
-                                execution_id: orphanId,
-                                error:
-                                    err instanceof Error
-                                        ? err.message
-                                        : String(err),
-                            }
-                        );
-                    });
-                    cleaned++;
-                    continue;
-                }
-                const lastActivity = state.lastActivity ?? state.startTime;
-                const idle = now - lastActivity;
-
-                if (
-                    idle > EXECUTION_STATE_TTL * 1000 &&
-                    state.jobCompleted !== true
-                ) {
-                    logger.warn('Cleaning up stale execution', {
-                        execution_id: state.execution_id,
-                        idleSeconds: idle / 1000,
-                        totalAgeSeconds: (now - state.startTime) / 1000,
-                        mode: state.mode,
-                    });
-
-                    if (state.mode === 'blocking') {
-                        await axios
-                            .delete(
-                                `${env.TOOL_CALL_SERVER_URL}/sessions/${state.execution_id}`,
-                                {
-                                    headers: internalServiceHeaders(),
-                                }
-                            )
-                            .catch(() => {});
-                    }
-                    await Promise.all([
-                        deleteToolHistory(state.execution_id),
-                        deleteBlockingResult(state.execution_id),
-                        redis.del(batchKeys[i]),
-                    ]);
-                    cleaned++;
-                }
+          const orphanId = stripHashTag(
+            batchKeys[i].slice('exec_state:'.length)
+          );
+          logger.warn(
+            'Reaping malformed exec_state and sibling keys',
+            {
+              execution_id: orphanId,
             }
+          );
+          await Promise.all([
+            redis.del(batchKeys[i]),
+            deleteToolHistory(orphanId),
+            deleteBlockingResult(orphanId),
+          ]).catch(err => {
+            logger.warn(
+              'Sibling delete failed during malformed-key cleanup',
+              {
+                execution_id: orphanId,
+                error:
+                                    err instanceof Error
+                                      ? err.message
+                                      : String(err),
+              }
+            );
+          });
+          cleaned++;
+          continue;
         }
+        const lastActivity = state.lastActivity ?? state.startTime;
+        const idle = now - lastActivity;
 
-        if (cleaned > 0) {
-            logger.info(`Cleaned up ${cleaned} stale executions`);
-            ptcReplayStaleCleanups.inc(cleaned);
+        if (
+          idle > EXECUTION_STATE_TTL * 1000 &&
+                    state.jobCompleted !== true
+        ) {
+          logger.warn('Cleaning up stale execution', {
+            execution_id: state.execution_id,
+            idleSeconds: idle / 1000,
+            totalAgeSeconds: (now - state.startTime) / 1000,
+            mode: state.mode,
+          });
+
+          if (state.mode === 'blocking') {
+            await axios
+              .delete(
+                `${env.TOOL_CALL_SERVER_URL}/sessions/${state.execution_id}`,
+                {
+                  headers: internalServiceHeaders(),
+                }
+              )
+              .catch(() => {});
+          }
+          await Promise.all([
+            deleteToolHistory(state.execution_id),
+            deleteBlockingResult(state.execution_id),
+            redis.del(batchKeys[i]),
+          ]);
+          cleaned++;
         }
-        return cleaned;
-    } catch (error) {
-        logger.error('Error cleaning up stale executions:', error);
-        return 0;
+      }
     }
+
+    if (cleaned > 0) {
+      logger.info(`Cleaned up ${cleaned} stale executions`);
+      ptcReplayStaleCleanups.inc(cleaned);
+    }
+    return cleaned;
+  } catch (error) {
+    logger.error('Error cleaning up stale executions:', error);
+    return 0;
+  }
 }
 
 export async function cleanupExecution(
-    execution_id: string,
-    mode: 'blocking' | 'replay'
+  execution_id: string,
+  mode: 'blocking' | 'replay'
 ): Promise<void> {
-    try {
-        const ops: Array<Promise<unknown>> = [
-            deleteExecutionState(execution_id),
-            deleteToolHistory(execution_id),
-            deleteBlockingResult(execution_id),
-        ];
-        if (mode === 'blocking') {
-            ops.push(
-                axios
-                    .delete(
-                        `${env.TOOL_CALL_SERVER_URL}/sessions/${execution_id}`,
-                        {
-                            headers: internalServiceHeaders(),
-                        }
-                    )
-                    .catch(() => {})
-            );
-        }
-        await Promise.all(ops);
-        logger.info('Execution cleanup completed', { execution_id, mode });
-    } catch (error) {
-        logger.error('Error during execution cleanup:', {
-            execution_id,
-            error,
-        });
+  try {
+    const ops: Array<Promise<unknown>> = [
+      deleteExecutionState(execution_id),
+      deleteToolHistory(execution_id),
+      deleteBlockingResult(execution_id),
+    ];
+    if (mode === 'blocking') {
+      ops.push(
+        axios
+          .delete(
+            `${env.TOOL_CALL_SERVER_URL}/sessions/${execution_id}`,
+            {
+              headers: internalServiceHeaders(),
+            }
+          )
+          .catch(() => {})
+      );
     }
+    await Promise.all(ops);
+    logger.info('Execution cleanup completed', { execution_id, mode });
+  } catch (error) {
+    logger.error('Error during execution cleanup:', {
+      execution_id,
+      error,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -944,66 +944,66 @@ export function validateToolResult(r: unknown):
           error_message?: string;
       }
     | { error: string } {
-    if (r == null || typeof r !== 'object' || Array.isArray(r)) {
-        return { error: 'tool_results entries must be objects' };
-    }
-    const obj = r as Record<string, unknown>;
-    const callId = obj.call_id;
-    if (typeof callId !== 'string' || !CALL_ID_RE.test(callId)) {
-        return {
-            error: `tool_results[].call_id must match /^call_\\d{3,6}$/, got: ${JSON.stringify(
-                callId
-            )}`,
-        };
-    }
-    if (!('result' in obj)) {
-        return { error: `tool_results[${callId}].result is required` };
-    }
-    if (obj.is_error !== undefined && typeof obj.is_error !== 'boolean') {
-        return {
-            error: `tool_results[${callId}].is_error must be a boolean if present`,
-        };
-    }
-    if (
-        obj.error_message !== undefined &&
+  if (r == null || typeof r !== 'object' || Array.isArray(r)) {
+    return { error: 'tool_results entries must be objects' };
+  }
+  const obj = r as Record<string, unknown>;
+  const callId = obj.call_id;
+  if (typeof callId !== 'string' || !CALL_ID_RE.test(callId)) {
+    return {
+      error: `tool_results[].call_id must match /^call_\\d{3,6}$/, got: ${JSON.stringify(
+        callId
+      )}`,
+    };
+  }
+  if (!('result' in obj)) {
+    return { error: `tool_results[${callId}].result is required` };
+  }
+  if (obj.is_error !== undefined && typeof obj.is_error !== 'boolean') {
+    return {
+      error: `tool_results[${callId}].is_error must be a boolean if present`,
+    };
+  }
+  if (
+    obj.error_message !== undefined &&
         typeof obj.error_message !== 'string'
-    ) {
-        return {
-            error: `tool_results[${callId}].error_message must be a string if present`,
-        };
-    }
-    let resultSerialized: string | undefined;
-    try {
-        resultSerialized = JSON.stringify(obj.result);
-    } catch (err) {
-        return {
-            error: `tool_results[${callId}].result is not JSON-serializable`,
-        };
-    }
-    /** `JSON.stringify` only throws on circular references; for `undefined`,
+  ) {
+    return {
+      error: `tool_results[${callId}].error_message must be a string if present`,
+    };
+  }
+  let resultSerialized: string | undefined;
+  try {
+    resultSerialized = JSON.stringify(obj.result);
+  } catch (err) {
+    return {
+      error: `tool_results[${callId}].result is not JSON-serializable`,
+    };
+  }
+  /** `JSON.stringify` only throws on circular references; for `undefined`,
      * functions, and `Symbol` it returns the JS value `undefined` rather
      * than the string `'undefined'`. The earlier `?? 'null'` fallback
      * silently coerced these to a 4-byte placeholder and accepted them
      * as valid history entries — but the entry would then deserialize
      * to `null` on replay, drifting from what the client originally
      * sent. Reject explicitly so callers get a clear error. */
-    if (resultSerialized === undefined) {
-        return {
-            error: `tool_results[${callId}].result is not JSON-serializable (got undefined / function / symbol)`,
-        };
-    }
-    const resultBytes = Buffer.byteLength(resultSerialized, 'utf8');
-    if (resultBytes > MAX_TOOL_RESULT_BYTES) {
-        return {
-            error: `tool_results[${callId}].result is ${resultBytes} bytes, exceeds per-result cap ${MAX_TOOL_RESULT_BYTES}`,
-        };
-    }
+  if (resultSerialized === undefined) {
     return {
-        call_id: callId,
-        result: obj.result,
-        is_error: obj.is_error as boolean | undefined,
-        error_message: obj.error_message as string | undefined,
+      error: `tool_results[${callId}].result is not JSON-serializable (got undefined / function / symbol)`,
     };
+  }
+  const resultBytes = Buffer.byteLength(resultSerialized, 'utf8');
+  if (resultBytes > MAX_TOOL_RESULT_BYTES) {
+    return {
+      error: `tool_results[${callId}].result is ${resultBytes} bytes, exceeds per-result cap ${MAX_TOOL_RESULT_BYTES}`,
+    };
+  }
+  return {
+    call_id: callId,
+    result: obj.result,
+    is_error: obj.is_error as boolean | undefined,
+    error_message: obj.error_message as string | undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1026,40 +1026,40 @@ export interface ValidatedContinuationResult {
  * so the branch coverage is unit-testable.
  */
 export function validateContinuationBatch(
-    tool_results: unknown[]
+  tool_results: unknown[]
 ):
     | { ok: true; results: ValidatedContinuationResult[] }
     | { ok: false; status: number; error: string } {
-    if (tool_results.length > MAX_REPLAY_CALLS) {
-        return {
-            ok: false,
-            status: 400,
-            error: `tool_results has ${tool_results.length} entries; the per-batch cap is ${MAX_REPLAY_CALLS}`,
-        };
+  if (tool_results.length > MAX_REPLAY_CALLS) {
+    return {
+      ok: false,
+      status: 400,
+      error: `tool_results has ${tool_results.length} entries; the per-batch cap is ${MAX_REPLAY_CALLS}`,
+    };
+  }
+  const results: ValidatedContinuationResult[] = [];
+  const seen = new Set<string>();
+  for (const raw of tool_results) {
+    const v = validateToolResult(raw);
+    if ('error' in v) {
+      return { ok: false, status: 400, error: v.error };
     }
-    const results: ValidatedContinuationResult[] = [];
-    const seen = new Set<string>();
-    for (const raw of tool_results) {
-        const v = validateToolResult(raw);
-        if ('error' in v) {
-            return { ok: false, status: 400, error: v.error };
-        }
-        if (seen.has(v.call_id)) {
-            return {
-                ok: false,
-                status: 400,
-                error: `Duplicate call_id in tool_results: ${v.call_id}`,
-            };
-        }
-        seen.add(v.call_id);
-        results.push({
-            call_id: v.call_id,
-            result: v.result,
-            is_error: v.is_error,
-            error_message: v.error_message,
-        });
+    if (seen.has(v.call_id)) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Duplicate call_id in tool_results: ${v.call_id}`,
+      };
     }
-    return { ok: true, results };
+    seen.add(v.call_id);
+    results.push({
+      call_id: v.call_id,
+      result: v.result,
+      is_error: v.is_error,
+      error_message: v.error_message,
+    });
+  }
+  return { ok: true, results };
 }
 
 /** Apply the post-state-load pre-checks to a continuation request:
@@ -1081,56 +1081,56 @@ export function checkContinuationPreconditions(params: {
 }):
     | { ok: true }
     | { ok: false; status: number; error: string; cleanupOnReject?: boolean } {
-    const {
-        state,
-        results,
-        userId,
-        apiKeyId,
-        tenantId,
-        authContextHash,
-        delta,
-    } = params;
-    if (state.mode !== 'replay') {
-        return {
-            ok: false,
-            status: 400,
-            error: 'Execution was started in blocking mode; continuation mode mismatch',
-        };
-    }
-    if (
-        state.userId !== userId ||
+  const {
+    state,
+    results,
+    userId,
+    apiKeyId,
+    tenantId,
+    authContextHash,
+    delta,
+  } = params;
+  if (state.mode !== 'replay') {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Execution was started in blocking mode; continuation mode mismatch',
+    };
+  }
+  if (
+    state.userId !== userId ||
         (state.apiKeyId != null && state.apiKeyId !== apiKeyId) ||
         (state.tenantId != null && state.tenantId !== tenantId) ||
         (state.authContextHash != null &&
             state.authContextHash !== authContextHash)
-    ) {
-        return { ok: false, status: 403, error: 'Forbidden' };
+  ) {
+    return { ok: false, status: 403, error: 'Forbidden' };
+  }
+  const issued = new Set(state.emittedCallIds ?? []);
+  for (const r of results) {
+    if (!issued.has(r.call_id)) {
+      return {
+        ok: false,
+        status: 400,
+        error: `tool_results[${r.call_id}] was not issued by the sandbox for this execution`,
+      };
     }
-    const issued = new Set(state.emittedCallIds ?? []);
-    for (const r of results) {
-        if (!issued.has(r.call_id)) {
-            return {
-                ok: false,
-                status: 400,
-                error: `tool_results[${r.call_id}] was not issued by the sandbox for this execution`,
-            };
-        }
-    }
-    if ((state.callCount ?? 0) + delta.newCallIds.length > MAX_REPLAY_CALLS) {
-        return {
-            ok: false,
-            status: 400,
-            error: `Execution exceeded maximum tool calls (${MAX_REPLAY_CALLS})`,
-            cleanupOnReject: true,
-        };
-    }
-    const projectedHistoryBytes = (state.historyBytes ?? 0) + delta.bytesDelta;
-    if (projectedHistoryBytes > MAX_TOOL_HISTORY_TOTAL_BYTES) {
-        return {
-            ok: false,
-            status: 400,
-            error: `Aggregate tool_history for this execution would be ${projectedHistoryBytes} bytes, exceeds cap ${MAX_TOOL_HISTORY_TOTAL_BYTES}`,
-        };
-    }
-    return { ok: true };
+  }
+  if ((state.callCount ?? 0) + delta.newCallIds.length > MAX_REPLAY_CALLS) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Execution exceeded maximum tool calls (${MAX_REPLAY_CALLS})`,
+      cleanupOnReject: true,
+    };
+  }
+  const projectedHistoryBytes = (state.historyBytes ?? 0) + delta.bytesDelta;
+  if (projectedHistoryBytes > MAX_TOOL_HISTORY_TOTAL_BYTES) {
+    return {
+      ok: false,
+      status: 400,
+      error: `Aggregate tool_history for this execution would be ${projectedHistoryBytes} bytes, exceeds cap ${MAX_TOOL_HISTORY_TOTAL_BYTES}`,
+    };
+  }
+  return { ok: true };
 }
