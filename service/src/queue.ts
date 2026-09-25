@@ -7,43 +7,43 @@ import type * as t from './types';
 import { Jobs } from './enum';
 import { env } from './config';
 import {
-    queueNameForExecution,
-    queueNamesForExecutionProfile,
+  queueNameForExecution,
+  queueNamesForExecutionProfile,
 } from './execution-profile';
 import type {
-    ExecutionProfile,
-    ExecutionProfileSource,
-    SandboxBackendName,
+  ExecutionProfile,
+  ExecutionProfileSource,
+  SandboxBackendName,
 } from './execution-profile';
 import logger from './logger';
 import { redisReconnectDelay } from './redis-options';
 import {
-    bullmqQueueJobs,
-    registerBullmqQueueMetricsCollector,
+  bullmqQueueJobs,
+  registerBullmqQueueMetricsCollector,
 } from './metrics';
 import { JobCancellationRegistry } from './job-cancellation';
 import { createRedisConnection, bullmqPrefix } from './redis-connection';
 
 const retryStrategy: CommonRedisOptions['retryStrategy'] = times => {
-    logger.warn(`Retrying Redis connection attempt ${times}`);
-    return redisReconnectDelay(times);
+  logger.warn(`Retrying Redis connection attempt ${times}`);
+  return redisReconnectDelay(times);
 };
 
 const reconnectOnError: CommonRedisOptions['reconnectOnError'] = err => {
-    logger.error('Redis connection error:', err);
-    const targetError = 'READONLY';
-    if (err.message.includes(targetError)) {
-        return true;
-    }
-    return false;
+  logger.error('Redis connection error:', err);
+  const targetError = 'READONLY';
+  if (err.message.includes(targetError)) {
+    return true;
+  }
+  return false;
 };
 
 const connection = createRedisConnection({
-    maxRetriesPerRequest: null,
-    retryStrategy,
-    reconnectOnError,
-    enableReadyCheck: true,
-    connectTimeout: 2000,
+  maxRetriesPerRequest: null,
+  retryStrategy,
+  reconnectOnError,
+  enableReadyCheck: true,
+  connectTimeout: 2000,
 });
 const jobCancellationRegistry = new JobCancellationRegistry(connection);
 
@@ -54,9 +54,9 @@ const prefix = bullmqPrefix();
 // while the execution-profile prefix prevents HTTP and Lambda workers from
 // consuming each other's jobs when they share Redis.
 const queueNames = queueNamesForExecutionProfile(
-    env.EXECUTION_PROFILE,
-    env.EXECUTION_PROFILE_SOURCE,
-    env.SANDBOX_BACKEND
+  env.EXECUTION_PROFILE,
+  env.EXECUTION_PROFILE_SOURCE,
+  env.SANDBOX_BACKEND
 );
 export interface QueueBinding {
     queue: Queue<t.JobData, t.JobResult, Jobs.execute>;
@@ -70,35 +70,35 @@ const queueResources = new Map<
 >();
 
 function getQueueResources(
-    name: string,
+  name: string,
 ): { queue: Queue<t.JobData, t.JobResult, Jobs.execute>; events: QueueEvents } {
-    const existing = queueResources.get(name);
-    if (existing != null) return existing;
+  const existing = queueResources.get(name);
+  if (existing != null) return existing;
 
-    const queue = new Queue<t.JobData, t.JobResult, Jobs.execute>(name, {
-        connection,
-        prefix,
-    });
-    const events = new QueueEvents(name, { connection, prefix });
-    setMaxListeners(0, queue, events);
-    const resources = { queue, events };
-    queueResources.set(name, resources);
-    return resources;
+  const queue = new Queue<t.JobData, t.JobResult, Jobs.execute>(name, {
+    connection,
+    prefix,
+  });
+  const events = new QueueEvents(name, { connection, prefix });
+  setMaxListeners(0, queue, events);
+  const resources = { queue, events };
+  queueResources.set(name, resources);
+  return resources;
 }
 
 export function getExecutionQueueBinding(
-    language: 'python' | 'bash',
-    backend: SandboxBackendName | undefined = env.SANDBOX_BACKEND,
-    profile: ExecutionProfile = env.EXECUTION_PROFILE,
-    source: ExecutionProfileSource = env.EXECUTION_PROFILE_SOURCE
+  language: 'python' | 'bash',
+  backend: SandboxBackendName | undefined = env.SANDBOX_BACKEND,
+  profile: ExecutionProfile = env.EXECUTION_PROFILE,
+  source: ExecutionProfileSource = env.EXECUTION_PROFILE_SOURCE
 ): QueueBinding {
-    const name = queueNameForExecution(
-        language,
-        profile,
-        source,
-        backend,
-    );
-    return { ...getQueueResources(name), language };
+  const name = queueNameForExecution(
+    language,
+    profile,
+    source,
+    backend,
+  );
+  return { ...getQueueResources(name), language };
 }
 
 /**
@@ -108,10 +108,10 @@ export function getExecutionQueueBinding(
  * QueueEvents connections for arbitrary names recovered from Redis.
  */
 export async function getExistingExecutionJob(
-    queueName: string,
-    jobId: string,
+  queueName: string,
+  jobId: string,
 ): Promise<Job<t.JobData, t.JobResult, Jobs.execute> | undefined> {
-    return queueResources.get(queueName)?.queue.getJob(jobId);
+  return queueResources.get(queueName)?.queue.getJob(jobId);
 }
 
 const { queue: pyQueue, events: pyQueueEvents } = getQueueResources(queueNames.python);
@@ -121,50 +121,50 @@ const queueMetricStates = ['waiting', 'active', 'delayed'] as const;
 const QUEUE_METRICS_TIMEOUT_MS = 1000;
 
 async function withTimeout<T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    message: string
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
 ): Promise<T> {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    void promise.catch(() => undefined);
-    const timeoutPromise = new Promise<never>((_, reject) => {
-        timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
-    });
-    try {
-        return await Promise.race([promise, timeoutPromise]);
-    } finally {
-        if (timeout !== undefined) {
-            clearTimeout(timeout);
-        }
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  void promise.catch(() => undefined);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
     }
+  }
 }
 
 registerBullmqQueueMetricsCollector(async () => {
-    await Promise.all(
-        [...queueResources.entries()].map(async ([name, { queue }]) => {
-            try {
-                const counts = await withTimeout(
-                    queue.getJobCounts(...queueMetricStates),
-                    QUEUE_METRICS_TIMEOUT_MS,
-                    `Timed out collecting BullMQ queue metrics for ${name}`
-                );
-                for (const state of queueMetricStates) {
-                    bullmqQueueJobs.set(
-                        { queue: name, state },
-                        counts[state] ?? 0
-                    );
-                }
-            } catch (error) {
-                logger.warn('Failed to collect BullMQ queue metrics', {
-                    queue: name,
-                    error,
-                });
-                for (const state of queueMetricStates) {
-                    bullmqQueueJobs.remove({ queue: name, state });
-                }
-            }
-        })
-    );
+  await Promise.all(
+    [...queueResources.entries()].map(async ([name, { queue }]) => {
+      try {
+        const counts = await withTimeout(
+          queue.getJobCounts(...queueMetricStates),
+          QUEUE_METRICS_TIMEOUT_MS,
+          `Timed out collecting BullMQ queue metrics for ${name}`
+        );
+        for (const state of queueMetricStates) {
+          bullmqQueueJobs.set(
+            { queue: name, state },
+            counts[state] ?? 0
+          );
+        }
+      } catch (error) {
+        logger.warn('Failed to collect BullMQ queue metrics', {
+          queue: name,
+          error,
+        });
+        for (const state of queueMetricStates) {
+          bullmqQueueJobs.remove({ queue: name, state });
+        }
+      }
+    })
+  );
 });
 
 /* job.waitUntilFinished() attaches a short-lived `closing` listener to the
@@ -175,20 +175,20 @@ registerBullmqQueueMetricsCollector(async () => {
 setMaxListeners(0, pyQueue, otherQueue, pyQueueEvents, otherQueueEvents);
 
 export async function closeQueueConnections(): Promise<void> {
-    await Promise.all(
-        [...queueResources.values()].flatMap(({ queue, events }) => [
-            queue.close(),
-            events.close(),
-        ]).concat(jobCancellationRegistry.close()),
-    );
+  await Promise.all(
+    [...queueResources.values()].flatMap(({ queue, events }) => [
+      queue.close(),
+      events.close(),
+    ]).concat(jobCancellationRegistry.close()),
+  );
 }
 
 export {
-    pyQueue,
-    otherQueue,
-    pyQueueEvents,
-    otherQueueEvents,
-    queueNames,
-    connection,
-    jobCancellationRegistry,
+  pyQueue,
+  otherQueue,
+  pyQueueEvents,
+  otherQueueEvents,
+  queueNames,
+  connection,
+  jobCancellationRegistry,
 };
