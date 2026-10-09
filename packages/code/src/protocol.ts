@@ -111,6 +111,7 @@ const BRIDGE_ARTIFACT_EXTENSIONS = new Set([
     '.pptx',
     '.xls',
     '.xlsx',
+    '.xlsb',
     '.odt',
     '.ods',
     '.odp',
@@ -241,8 +242,8 @@ const BRIDGE_ARTIFACT_MEDIA_TYPES: Readonly<Record<string, string>> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.xls': 'application/vnd.ms-excel',
-    '.xlsx':
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xlsb': 'application/vnd.ms-excel.sheet.binary.macroenabled.12',
   '.xml': 'application/xml',
   '.yaml': 'application/yaml',
   '.yml': 'application/yaml',
