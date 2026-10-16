@@ -484,6 +484,12 @@ redis:
   # hostname-mismatch errors.  Mirrors REDIS_USE_ALTERNATIVE_DNS_LOOKUP.
   useAlternativeDnsLookup: false
 
+  # Namespace for every Redis key and pub/sub channel (REDIS_PREFIX). Set a
+  # distinct value per release when several share one Redis, otherwise they
+  # consume each other's jobs and state. Must not contain '{' or '}'.
+  # Changing it on a live release orphans existing keys.
+  prefix: ""
+
 # =============================================================================
 # MINIO (S3-compatible storage)
 # =============================================================================

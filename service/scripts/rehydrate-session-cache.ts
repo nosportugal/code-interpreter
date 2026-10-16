@@ -2,6 +2,7 @@ import IORedis from 'ioredis';
 import type * as tls from 'tls';
 import { isValidId } from '../src/utils';
 import { redisKeepAliveOptions } from '../src/redis-options';
+import { redisKeyPrefix } from '../src/redis-connection';
 
 /**
  * One-time recovery for session ownership keys that expired before the
@@ -611,6 +612,7 @@ function createRedisClient(): IORedis {
     enableReadyCheck: true,
     connectTimeout: 10000,
     disconnectTimeout: 2000,
+    keyPrefix: redisKeyPrefix() || undefined,
     ...redisKeepAliveOptions(),
     tls: process.env.REDIS_TLS === 'true'
       ? { rejectUnauthorized: false } as tls.ConnectionOptions

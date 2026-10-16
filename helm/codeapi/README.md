@@ -224,6 +224,16 @@ redis:
 The CA certificate is mounted from the Secret into every component pod and
 passed to ioredis via `REDIS_CA`. No sidecar is needed.
 
+**Sharing one Redis.** Give each release its own `redis.prefix` (rendered as
+`REDIS_PREFIX` into every component). All keys and pub/sub channels are
+namespaced with it, and BullMQ queues use `{<prefix>}` in cluster mode instead
+of the default `{codeapi}`, so releases never consume each other's jobs:
+
+```yaml
+redis:
+    prefix: nos-gpt-staging # must not contain '{' or '}'
+```
+
 **Package delivery.** KVM deployments default to
 `workerSandbox.packages.source=image`. Build and publish the baked runner target
 under the existing `workerSandbox.sandboxImage` repository and tag:

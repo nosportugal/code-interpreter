@@ -99,11 +99,68 @@ export function buildTlsOptions(): Record<string, unknown> | undefined {
 }
 
 /**
- * Returns the BullMQ `prefix` required in cluster mode so that all queue keys
- * land in the same hash slot.  Returns undefined in standalone mode (no prefix).
+ * The REDIS_PREFIX namespace, isolating deployments that share one Redis.
+ * Returns undefined when unset or blank. Surrounding `{}` and trailing `:` are
+ * tolerated and stripped; any other brace is rejected because, in cluster mode,
+ * it would override the per-id hash tags every multi-key script relies on.
+ */
+export function redisPrefix(): string | undefined {
+  const raw = process.env.REDIS_PREFIX?.trim();
+  if (!raw) return undefined;
+  const name = stripHashTag(raw).replace(/:+$/, '');
+  if (!name) return undefined;
+  if (/[{}]/.test(name)) {
+    throw new Error(`REDIS_PREFIX must not contain '{' or '}': ${raw}`);
+  }
+  return name;
+}
+
+/**
+ * ioredis `keyPrefix` applied to every non-BullMQ client: `<REDIS_PREFIX>:`,
+ * or '' when REDIS_PREFIX is unset.
+ */
+export function redisKeyPrefix(): string {
+  const name = redisPrefix();
+  return name ? `${name}:` : '';
+}
+
+/**
+ * Returns the BullMQ `prefix`. Cluster mode always wraps it in a hash tag so
+ * all queue keys land in the same slot, defaulting to `{codeapi}`. Standalone
+ * mode uses REDIS_PREFIX as-is, or undefined (BullMQ's own default) when unset.
  */
 export function bullmqPrefix(): string | undefined {
-  return isClusterMode() ? '{codeapi}' : undefined;
+  const name = redisPrefix();
+  if (!isClusterMode()) return name;
+  return hashTag(name ?? 'codeapi');
+}
+
+/** The ioredis `keyPrefix` a client transparently applies to command keys. */
+export function clientKeyPrefix(client: RedisClient): string {
+  return client.options?.keyPrefix ?? '';
+}
+
+/**
+ * Prepend the client's key prefix to a name ioredis does not prefix on its own:
+ * Lua ARGV that the script turns into keys, and pub/sub channels.
+ */
+export function withClientKeyPrefix(client: RedisClient, name: string): string {
+  return `${clientKeyPrefix(client)}${name}`;
+}
+
+/**
+ * Strip the client's key prefix from a raw key name returned by Redis (SCAN
+ * results, or key names a Lua script stored from its already-prefixed KEYS),
+ * so it can be passed back to the same client without double-prefixing.
+ */
+export function stripClientKeyPrefix(client: RedisClient, key: string): string {
+  const prefix = clientKeyPrefix(client);
+  return prefix && key.startsWith(prefix) ? key.slice(prefix.length) : key;
+}
+
+/** SCAN MATCH pattern covering the client's key prefix (glob-escaped). */
+export function clientScanPattern(client: RedisClient, match: string): string {
+  return `${clientKeyPrefix(client).replace(/[*?[\]\\]/g, '\\$&')}${match}`;
 }
 
 /**
@@ -132,7 +189,8 @@ export const SCAN_KEYS_DEFAULT_LIMIT = 10_000;
  * command. Stops collecting once `limit` keys have been gathered. In
  * cluster mode, SCAN is issued against every master node individually
  * because `Cluster` has no top-level `scanStream`; each node owns a
- * disjoint set of hash slots so there are no duplicates across nodes. */
+ * disjoint set of hash slots so there are no duplicates across nodes.
+ * `match` and the returned keys are relative to the client's key prefix. */
 export async function scanKeys(
   client: RedisClient,
   match: string,
@@ -140,12 +198,13 @@ export async function scanKeys(
   limit = SCAN_KEYS_DEFAULT_LIMIT
 ): Promise<string[]> {
   const out: string[] = [];
+  const pattern = clientScanPattern(client, match);
 
   const collect = async (node: Redis): Promise<void> => {
-    const stream = node.scanStream({ match, count });
+    const stream = node.scanStream({ match: pattern, count });
     for await (const batch of stream as AsyncIterable<string[]>) {
       for (const key of batch) {
-        out.push(key);
+        out.push(stripClientKeyPrefix(client, key));
         if (out.length >= limit) {
           stream.destroy();
           logger.warn(
@@ -191,10 +250,16 @@ type ConnectionOverrides = Partial<
  * In cluster mode the overrides are forwarded to `redisOptions` (applied
  * per-node).  The cluster-level reconnect loop is handled independently via
  * `clusterRetryStrategy`.
+ *
+ * Every key is namespaced with REDIS_PREFIX through ioredis `keyPrefix`, unless
+ * `forBullmq` is set: BullMQ rejects `keyPrefix` connections and namespaces its
+ * keys through its own `prefix` option (see `bullmqPrefix`).
  */
 export function createRedisConnection(
-  overrides: ConnectionOverrides
+  overrides: ConnectionOverrides,
+  { forBullmq = false }: { forBullmq?: boolean } = {}
 ): RedisClient {
+  const keyPrefix = forBullmq ? '' : redisKeyPrefix();
   const tls = buildTlsOptions() as RedisOptions['tls'];
   const dnsLookup: ClusterOptions['dnsLookup'] | undefined =
         process.env.REDIS_USE_ALTERNATIVE_DNS_LOOKUP === 'true'
@@ -214,6 +279,7 @@ export function createRedisConnection(
     const nodes = parseRedisNodes();
     return new Cluster(nodes, {
       ...(dnsLookup ? { dnsLookup } : {}),
+      ...(keyPrefix ? { keyPrefix } : {}),
       redisOptions: baseOptions,
       clusterRetryStrategy(times) {
         if (times > MAX_CLUSTER_RECONNECT_ATTEMPTS) {
@@ -231,5 +297,10 @@ export function createRedisConnection(
   }
 
   const [{ host, port }] = parseRedisNodes();
-  return new IORedis({ host, port, ...baseOptions });
+  return new IORedis({
+    host,
+    port,
+    ...baseOptions,
+    ...(keyPrefix ? { keyPrefix } : {}),
+  });
 }

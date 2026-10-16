@@ -1,7 +1,8 @@
 import { Queue, QueueEvents } from 'bullmq';
 import { setMaxListeners } from 'node:events';
 import { nanoid } from 'nanoid';
-import { connection } from '../queue';
+import { bullmqConnection as connection } from '../queue';
+import { bullmqPrefix } from '../redis-connection';
 import { hostedAppOperationTimeoutMs } from '../config';
 import logger from '../logger';
 import { withHostedAppQueueDeadline } from './queue-deadline';
@@ -24,9 +25,12 @@ function resources(): { queue: HostedAppQueue; events: QueueEvents } {
   if (!hostedAppQueue || !hostedAppQueueEvents) {
     hostedAppQueue = new Queue<HostedAppJobData, HostedAppJobResult, HostedAppJobName>(
       HOSTED_APP_QUEUE_NAME,
-      { connection },
+      { connection, prefix: bullmqPrefix() },
     );
-    hostedAppQueueEvents = new QueueEvents(HOSTED_APP_QUEUE_NAME, { connection });
+    hostedAppQueueEvents = new QueueEvents(HOSTED_APP_QUEUE_NAME, {
+      connection,
+      prefix: bullmqPrefix(),
+    });
     setMaxListeners(0, hostedAppQueue, hostedAppQueueEvents);
     /* These resources are created after lifecycle startup, on first use, so the
      * ordinary queue listener registration never sees them. An unhandled

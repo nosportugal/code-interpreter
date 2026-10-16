@@ -20,7 +20,12 @@ import {
   withTraceContext,
 } from './telemetry';
 import logger from './toolCallServerLogger';
-import { createRedisConnection, hashTag, scanKeys } from './redis-connection';
+import {
+  createRedisConnection,
+  hashTag,
+  scanKeys,
+  withClientKeyPrefix,
+} from './redis-connection';
 
 const INSTANCE_ID = process.env.INSTANCE_ID ?? nanoid();
 const PORT = Number(process.env.TOOL_CALL_SERVER_PORT) || 3033;
@@ -262,7 +267,7 @@ async function handleSubmitResults(
 
       // Publish for waiting subscribers
       await redis.publish(
-        resultKey(executionId, result.call_id),
+        withClientKeyPrefix(redis, resultKey(executionId, result.call_id)),
         JSON.stringify(resultData),
       );
 

@@ -1,8 +1,14 @@
-import type { RedisClient } from './redis-connection';
+import { withClientKeyPrefix, type RedisClient } from './redis-connection';
 import type { Job, QueueEvents } from 'bullmq';
 
 const JOB_CANCELLATION_PREFIX = 'codeapi:job-cancellation:v1';
 const JOB_CANCELLATION_CHANNEL = `${JOB_CANCELLATION_PREFIX}:events`;
+
+/** ioredis `keyPrefix` never applies to pub/sub channels; add it explicitly so
+ * deployments sharing one Redis do not see each other's cancellations. */
+function jobCancellationChannel(commands: RedisClient): string {
+  return withClientKeyPrefix(commands, JOB_CANCELLATION_CHANNEL);
+}
 export const CLIENT_DISCONNECT_REASON = 'client_disconnected';
 export const JOB_CANCELLED_MESSAGE = 'Job cancelled after client disconnected';
 
@@ -76,7 +82,7 @@ export class JobCancellationRegistry {
     channel: string,
     raw: string,
   ): void => {
-    if (channel !== JOB_CANCELLATION_CHANNEL) return;
+    if (channel !== jobCancellationChannel(this.commands)) return;
     const target = parseTarget(raw);
     if (target == null) return;
     for (const controller of this.controllers.get(targetKey(target))
@@ -187,7 +193,7 @@ export class JobCancellationRegistry {
       this.subscriberEndHandlers.set(subscriber, onEnd);
       subscriber.on('end', onEnd);
       try {
-        await subscriber.subscribe(JOB_CANCELLATION_CHANNEL);
+        await subscriber.subscribe(jobCancellationChannel(this.commands));
       } catch (error) {
         this.detachSubscriber(subscriber);
         if (this.subscriber === subscriber) this.subscriber = undefined;
@@ -293,7 +299,7 @@ async function cancelJobInRedis(
     cancellationKey(target),
     `${cancellationKey(target)}:result`,
     Math.max(1, ttlSeconds),
-    JOB_CANCELLATION_CHANNEL,
+    jobCancellationChannel(commands),
     JSON.stringify(target),
     includeResult ? '1' : '0',
   );

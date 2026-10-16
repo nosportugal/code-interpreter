@@ -1,6 +1,7 @@
 import { Worker } from 'bullmq';
 import { env, hostedAppOperationTimeoutMs } from '../config';
-import { connection } from '../queue';
+import { bullmqConnection } from '../queue';
+import { bullmqPrefix } from '../redis-connection';
 import { withSpan, withTraceContext } from '../telemetry';
 import { HostedAppControlPlaneError } from './control-plane';
 import { HostedAppMicrovmError } from './microvm-runtime';
@@ -101,7 +102,8 @@ export const hostedAppWorker: Worker<
   HostedAppJobName
 > | undefined = env.HOSTED_APPS_ENABLED
   ? new Worker(HOSTED_APP_QUEUE_NAME, processHostedAppJob, {
-    connection,
+    connection: bullmqConnection,
+    prefix: bullmqPrefix(),
     /* Lifecycle transitions are serialized again by their per-app Redis lock.
      * This modest concurrency allows unrelated apps to launch in parallel while
      * the fleet-wide AWS throttle remains authoritative. */

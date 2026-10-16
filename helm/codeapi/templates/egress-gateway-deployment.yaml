@@ -86,6 +86,7 @@ spec:
             - name: USE_REDIS_CLUSTER
               value: {{ include "codeapi.redis.clusterEnabled" . | quote }}
             {{- include "codeapi.redis.tlsEnv" . | nindent 12 }}
+            {{- include "codeapi.redis.prefixEnv" . | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /live

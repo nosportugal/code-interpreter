@@ -22,7 +22,7 @@ import {
   registerBullmqQueueMetricsCollector,
 } from './metrics';
 import { JobCancellationRegistry } from './job-cancellation';
-import { createRedisConnection, bullmqPrefix } from './redis-connection';
+import { createRedisConnection, bullmqPrefix, redisKeyPrefix } from './redis-connection';
 
 const retryStrategy: CommonRedisOptions['retryStrategy'] = times => {
   logger.warn(`Retrying Redis connection attempt ${times}`);
@@ -38,13 +38,22 @@ const reconnectOnError: CommonRedisOptions['reconnectOnError'] = err => {
   return false;
 };
 
-const connection = createRedisConnection({
+const connectionOptions = {
   maxRetriesPerRequest: null,
   retryStrategy,
   reconnectOnError,
   enableReadyCheck: true,
   connectTimeout: 2000,
+};
+/** BullMQ queues, events and workers. Never carries an ioredis `keyPrefix`. */
+const bullmqConnection = createRedisConnection(connectionOptions, {
+  forBullmq: true,
 });
+/** Every non-BullMQ key. Shares the BullMQ connection unless REDIS_PREFIX
+ * requires a separate `keyPrefix` client. */
+const connection = redisKeyPrefix()
+  ? createRedisConnection(connectionOptions)
+  : bullmqConnection;
 const jobCancellationRegistry = new JobCancellationRegistry(connection);
 
 const prefix = bullmqPrefix();
@@ -76,10 +85,10 @@ function getQueueResources(
   if (existing != null) return existing;
 
   const queue = new Queue<t.JobData, t.JobResult, Jobs.execute>(name, {
-    connection,
+    connection: bullmqConnection,
     prefix,
   });
-  const events = new QueueEvents(name, { connection, prefix });
+  const events = new QueueEvents(name, { connection: bullmqConnection, prefix });
   setMaxListeners(0, queue, events);
   const resources = { queue, events };
   queueResources.set(name, resources);
@@ -190,5 +199,6 @@ export {
   otherQueueEvents,
   queueNames,
   connection,
+  bullmqConnection,
   jobCancellationRegistry,
 };

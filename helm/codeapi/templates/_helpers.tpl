@@ -268,6 +268,18 @@ Usage: {{ include "codeapi.redis.tlsEnv" . }}
 {{- end }}
 
 {{/*
+Emit REDIS_PREFIX for every component that talks to Redis. Applies to both the
+bundled and an external Redis; renders nothing when redis.prefix is empty.
+Usage: {{ include "codeapi.redis.prefixEnv" . }}
+*/}}
+{{- define "codeapi.redis.prefixEnv" -}}
+{{- with .Values.redis.prefix }}
+- name: REDIS_PREFIX
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
 Volume definition for the Redis CA certificate secret.
 Renders nothing when redis.tls.caSecretName is empty, or the bundled Redis
 subchart is enabled (it never speaks TLS).

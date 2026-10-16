@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 
-import type { RedisClient } from '../redis-connection';
+import { withClientKeyPrefix, type RedisClient } from '../redis-connection';
 import type * as t from '../types';
 import type {
   BridgeAssignment,
@@ -696,7 +696,10 @@ export class RedisBridgeStore {
           registration.incarnationId,
           JSON.stringify(registration),
           String(this.workerTtlSeconds),
-          `${PREFIX}:worker:${encodeURIComponent(registration.workerId)}:incarnation:`,
+          withClientKeyPrefix(
+            this.redis,
+            `${PREFIX}:worker:${encodeURIComponent(registration.workerId)}:incarnation:`,
+          ),
           authorizationObject?.pairingGeneration == null
             ? ''
             : String(authorizationObject.pairingGeneration),
