@@ -15,7 +15,7 @@ import {
   activeJobs,
   workerRunning,
 } from './metrics';
-import { connection, jobCancellationRegistry, queueNames } from './queue';
+import { bullmqConnection, connection, jobCancellationRegistry, queueNames } from './queue';
 import { bullmqPrefix } from './redis-connection';
 import { env, jobDeadlineAtMs } from './config';
 import { summarizeSandboxResponse, summarizeText } from './execution-log';
@@ -472,7 +472,7 @@ async function processJobInner(job: t.ExecuteJob): Promise<t.ExecuteResult> {
 // This enables horizontal scaling where any worker can process any job from the shared queue
 // Each worker respects its own concurrency limit based on its co-located sandbox capacity
 export const pyWorker = new Worker(queueNames.python, processJob, {
-  connection,
+  connection: bullmqConnection,
   prefix: bullmqPrefix(),
   concurrency: env.PYTHON_CONCURRENCY,
   limiter: {
@@ -482,7 +482,7 @@ export const pyWorker = new Worker(queueNames.python, processJob, {
 });
 
 export const otherWorker = new Worker(queueNames.other, processJob, {
-  connection,
+  connection: bullmqConnection,
   prefix: bullmqPrefix(),
   concurrency: env.OTHER_CONCURRENCY,
   limiter: {

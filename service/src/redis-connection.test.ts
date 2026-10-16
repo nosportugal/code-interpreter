@@ -4,12 +4,20 @@ import {
   isClusterMode,
   buildTlsOptions,
   bullmqPrefix,
+  redisPrefix,
+  redisKeyPrefix,
+  clientKeyPrefix,
+  withClientKeyPrefix,
+  stripClientKeyPrefix,
+  clientScanPattern,
+  createRedisConnection,
+  type RedisClient,
 } from './redis-connection';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // We test the pure helper functions from redis-connection.ts without
-// establishing any real network connection.  ioredis constructors are NOT
-// called in these tests.
+// establishing any real network connection.  The only ioredis clients built
+// here (createRedisConnection keyPrefix) are disconnected immediately.
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Preserve original env so each test can start clean
@@ -206,5 +214,111 @@ describe('bullmqPrefix', () => {
   test('returns "{codeapi}" when REDIS_HOST contains multiple nodes', () => {
     resetEnv({ REDIS_HOST: 'node1,node2,node3' });
     expect(bullmqPrefix()).toBe('{codeapi}');
+  });
+
+  test('uses REDIS_PREFIX as-is in standalone mode', () => {
+    resetEnv({ REDIS_HOST: 'redis', REDIS_PREFIX: 'nos-gpt-staging' });
+    expect(bullmqPrefix()).toBe('nos-gpt-staging');
+  });
+
+  test('wraps REDIS_PREFIX in a hash tag in cluster mode', () => {
+    resetEnv({ USE_REDIS_CLUSTER: 'true', REDIS_PREFIX: 'nos-gpt-staging' });
+    expect(bullmqPrefix()).toBe('{nos-gpt-staging}');
+  });
+
+  test('does not double-wrap a REDIS_PREFIX that is already a hash tag', () => {
+    resetEnv({ USE_REDIS_CLUSTER: 'true', REDIS_PREFIX: '{nos-gpt-staging}' });
+    expect(bullmqPrefix()).toBe('{nos-gpt-staging}');
+  });
+
+  test('treats a blank REDIS_PREFIX as unset', () => {
+    resetEnv({ REDIS_HOST: 'redis', REDIS_PREFIX: '  ' });
+    expect(bullmqPrefix()).toBeUndefined();
+    resetEnv({ USE_REDIS_CLUSTER: 'true', REDIS_PREFIX: '  ' });
+    expect(bullmqPrefix()).toBe('{codeapi}');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// REDIS_PREFIX key namespace
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('redisPrefix / redisKeyPrefix', () => {
+  test('are empty when REDIS_PREFIX is unset or blank', () => {
+    resetEnv();
+    expect(redisPrefix()).toBeUndefined();
+    expect(redisKeyPrefix()).toBe('');
+    resetEnv({ REDIS_PREFIX: ' ' });
+    expect(redisKeyPrefix()).toBe('');
+  });
+
+  test('append a single ":" separator to the namespace', () => {
+    resetEnv({ REDIS_PREFIX: ' nos-gpt-staging ' });
+    expect(redisPrefix()).toBe('nos-gpt-staging');
+    expect(redisKeyPrefix()).toBe('nos-gpt-staging:');
+    resetEnv({ REDIS_PREFIX: 'nos-gpt-staging::' });
+    expect(redisKeyPrefix()).toBe('nos-gpt-staging:');
+  });
+
+  test('accept a hash-tagged value but never emit braces into app keys', () => {
+    resetEnv({ REDIS_PREFIX: '{nos-gpt-staging}' });
+    expect(redisKeyPrefix()).toBe('nos-gpt-staging:');
+  });
+
+  test('reject inner braces that would override per-id hash tags', () => {
+    resetEnv({ REDIS_PREFIX: 'a{b}c' });
+    expect(() => redisPrefix()).toThrow(/must not contain/);
+  });
+});
+
+describe('client key prefix helpers', () => {
+  const client = (keyPrefix?: string): RedisClient =>
+    ({ options: keyPrefix == null ? {} : { keyPrefix } }) as unknown as RedisClient;
+
+  test('are no-ops for an unprefixed client', () => {
+    const c = client();
+    expect(clientKeyPrefix(c)).toBe('');
+    expect(withClientKeyPrefix(c, 'codeapi:x')).toBe('codeapi:x');
+    expect(stripClientKeyPrefix(c, 'codeapi:x')).toBe('codeapi:x');
+    expect(clientScanPattern(c, 'exec_state:*')).toBe('exec_state:*');
+  });
+
+  test('add and strip the client prefix', () => {
+    const c = client('dep:');
+    expect(withClientKeyPrefix(c, 'codeapi:x')).toBe('dep:codeapi:x');
+    expect(stripClientKeyPrefix(c, 'dep:codeapi:x')).toBe('codeapi:x');
+    expect(stripClientKeyPrefix(c, 'other:codeapi:x')).toBe('other:codeapi:x');
+  });
+
+  test('glob-escape the prefix in SCAN patterns', () => {
+    expect(clientScanPattern(client('d*p[1]:'), 'tool_call:*'))
+      .toBe('d\\*p\\[1\\]:tool_call:*');
+  });
+});
+
+describe('createRedisConnection keyPrefix', () => {
+  const open = (
+    env: Record<string, string>,
+    forBullmq?: boolean,
+  ): RedisClient => {
+    resetEnv({ REDIS_HOST: '127.0.0.1', REDIS_PORT: '1', ...env });
+    const c = createRedisConnection(
+      { retryStrategy: () => null, enableReadyCheck: false },
+      { forBullmq },
+    );
+    c.on('error', () => {});
+    c.disconnect();
+    return c;
+  };
+
+  test('applies REDIS_PREFIX to standalone and cluster clients', () => {
+    expect(open({ REDIS_PREFIX: 'dep' }).options.keyPrefix).toBe('dep:');
+    expect(open({ REDIS_PREFIX: 'dep', USE_REDIS_CLUSTER: 'true' }).options.keyPrefix)
+      .toBe('dep:');
+  });
+
+  test('never sets keyPrefix on BullMQ connections or when unset', () => {
+    expect(open({ REDIS_PREFIX: 'dep' }, true).options.keyPrefix).toBeFalsy();
+    expect(open({}).options.keyPrefix).toBeFalsy();
   });
 });

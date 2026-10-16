@@ -6,7 +6,12 @@ import {
   randomBytes,
 } from 'crypto';
 
-import type { RedisClient } from '../redis-connection';
+import {
+  clientScanPattern,
+  stripClientKeyPrefix,
+  withClientKeyPrefix,
+  type RedisClient,
+} from '../redis-connection';
 
 import {
   BROWSER_ENROLLMENT_MAX_TTL_MS,
@@ -1228,8 +1233,11 @@ export class RedisBridgePairingStore {
       `${PREFIX}:worker:${encodeURIComponent(workerId)}:incarnation`,
       `${PREFIX}:worker:${encodeURIComponent(workerId)}:ready`,
       workerEnrollmentKey(workerId),
-      `${PREFIX}:credential:`,
-      `${PREFIX}:worker:${encodeURIComponent(workerId)}:incarnation:`,
+      withClientKeyPrefix(this.redis, `${PREFIX}:credential:`),
+      withClientKeyPrefix(
+        this.redis,
+        `${PREFIX}:worker:${encodeURIComponent(workerId)}:incarnation:`,
+      ),
     );
   }
 
@@ -1255,8 +1263,11 @@ export class RedisBridgePairingStore {
       await this.redis.persist(deadlineKey);
     }
 
+    // The index holds the full key the issue script stored from its KEYS.
     const indexedKey = await this.redis.get(workerPairingIndexKey(workerId));
-    const indexedRaw = indexedKey == null ? null : await this.redis.get(indexedKey);
+    const indexedRaw = indexedKey == null
+      ? null
+      : await this.redis.get(stripClientKeyPrefix(this.redis, indexedKey));
     let rollbackDetected = false;
     if (indexedRaw != null) {
       try {
@@ -1355,15 +1366,16 @@ export class RedisBridgePairingStore {
     try {
       let cursor = '0';
       do {
-        const [nextCursor, keys] = await this.redis.scan(
+        const [nextCursor, rawKeys] = await this.redis.scan(
           cursor,
           'MATCH',
-          `${PREFIX}:pairing:*`,
+          clientScanPattern(this.redis, `${PREFIX}:pairing:*`),
           'COUNT',
           100,
         );
         if (renewalError != null) throw renewalError;
         cursor = nextCursor;
+        const keys = rawKeys.map(key => stripClientKeyPrefix(this.redis, key));
         if (keys.length === 0) continue;
         const values = await this.redis.mget(...keys);
         const matching = keys.filter((_key, index) => {

@@ -4,6 +4,7 @@ import {
   pyQueue,
   otherQueue,
   connection,
+  bullmqConnection,
   closeQueueConnections,
 } from './queue';
 import { validateStartupAuthConfig } from './auth/startup';
@@ -296,6 +297,7 @@ export async function gracefulShutdown(): Promise<void> {
     // Only disconnect Redis if explicitly requested
     if (process.env.FORCE_REDIS_DISCONNECT === 'true') {
       connection.disconnect();
+      if (bullmqConnection !== connection) bullmqConnection.disconnect();
       logger.info('Redis connection closed');
     }
 
