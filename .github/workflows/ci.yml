@@ -297,6 +297,9 @@ jobs:
       - name: Build service
         run: bun run build
 
+      - name: Bridge lifecycle on a real three-master Redis Cluster
+        run: USE_REDIS_CLUSTER=true BRIDGE_REDIS_CLUSTER_TEST=1 bun test src/bridge/redis-cluster.integration.test.ts
+
       - name: Verify patched dependency compatibility under Node and Bun
         run: |
           node --test scripts/dependency-compat.test.cjs

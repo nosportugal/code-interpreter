@@ -45,7 +45,6 @@ import {
   commitToolHistoryAndState,
   loadToolHistory,
   refreshExecutionTtl,
-  scanKeys,
   cleanupExecution,
   cleanupStaleExecutions,
   validateContinuationBatch,
@@ -55,6 +54,7 @@ import {
   historyKey,
 } from '../src/service/replay-state';
 import { hashToolInput } from '../src/tool-input-signature';
+import { hashTag, scanKeys } from '../src/redis-connection';
 
 let passed = 0;
 let failed = 0;
@@ -176,7 +176,7 @@ await withRedis(async (r) => {
   await setExecutionState(state);
   const loaded = await getExecutionState(state.execution_id);
   assert(loaded?.execution_id === state.execution_id, 'set/get round-trip');
-  const ttl = await r.ttl(`exec_state:${state.execution_id}`);
+  const ttl = await r.ttl(`exec_state:${hashTag(state.execution_id)}`);
   assert(ttl > 0 && ttl <= EXECUTION_STATE_TTL, 'TTL set on initial write');
 
   await deleteExecutionState(state.execution_id);
@@ -372,7 +372,7 @@ await withRedis(async (r) => {
     'committed: tool_history hash entry persisted',
   );
 
-  const stateTtl = await r.ttl(`exec_state:${state.execution_id}`);
+  const stateTtl = await r.ttl(`exec_state:${hashTag(state.execution_id)}`);
   const historyTtlAfter = await r.ttl(historyKey(state.execution_id));
   assert(stateTtl > 0 && stateTtl <= EXECUTION_STATE_TTL, 'commit refreshes exec_state TTL');
   assert(historyTtlAfter > 0 && historyTtlAfter <= EXECUTION_STATE_TTL, 'commit refreshes tool_history TTL');
@@ -396,7 +396,7 @@ await withRedis(async (r) => {
   /** Decay both TTLs to a value much smaller than EXECUTION_STATE_TTL so
    * the assertion can prove the refresh actually happened (vs. just
    * succeeding because the TTL hadn't moved). */
-  await r.expire(`exec_state:${id}`, 5);
+  await r.expire(`exec_state:${hashTag(id)}`, 5);
   await r.expire(historyKey(id), 5);
 
   await commitToolHistoryAndState(state, {
@@ -405,7 +405,7 @@ await withRedis(async (r) => {
     bytesDelta: 0,
   });
 
-  const stateTtlAfter = await r.ttl(`exec_state:${id}`);
+  const stateTtlAfter = await r.ttl(`exec_state:${hashTag(id)}`);
   const historyTtlAfter = await r.ttl(historyKey(id));
   assert(stateTtlAfter > 5, `idempotent commit refreshes exec_state TTL (got ${stateTtlAfter})`);
   assert(
@@ -549,7 +549,7 @@ await withRedis(async (r) => {
     session_id: id, stdout: 'big', stderr: '', files: [], code: 0,
   });
   assert(
-    (await r.exists(`exec_state:${id}`)) === 0,
+    (await r.exists(`exec_state:${hashTag(id)}`)) === 0,
     'late setExecutionResult does NOT resurrect exec_state after cleanup',
   );
   assert(
@@ -562,7 +562,7 @@ await withRedis(async (r) => {
   await deleteExecutionState(id);
   await setExecutionError(id, new Error('late'));
   assert(
-    (await r.exists(`exec_state:${id}`)) === 0,
+    (await r.exists(`exec_state:${hashTag(id)}`)) === 0,
     'late setExecutionError does NOT resurrect exec_state after cleanup',
   );
 });
@@ -580,10 +580,10 @@ await withRedis(async (r) => {
   }));
   /** Shorten TTLs to 5s, then refresh and confirm both are bumped
    * back to the full EXECUTION_STATE_TTL. */
-  await r.expire(`exec_state:${state.execution_id}`, 5);
+  await r.expire(`exec_state:${hashTag(state.execution_id)}`, 5);
   await r.expire(historyKey(state.execution_id), 5);
   await refreshExecutionTtl(state.execution_id);
-  const stateTtl = await r.ttl(`exec_state:${state.execution_id}`);
+  const stateTtl = await r.ttl(`exec_state:${hashTag(state.execution_id)}`);
   const historyTtl = await r.ttl(historyKey(state.execution_id));
   assert(stateTtl > 5, 'refresh extends exec_state TTL');
   assert(historyTtl > 5, 'refresh extends tool_history TTL');
@@ -598,7 +598,7 @@ await withRedis(async (r) => {
   await r.set('exec_state:a', 'x');
   await r.set('exec_state:b', 'x');
   await r.set('other_key', 'x');
-  const found = await scanKeys('exec_state:*');
+  const found = await scanKeys(r, 'exec_state:*');
   assert(found.length === 2, `scanKeys returns matching keys (got ${found.length})`);
   assert(!found.includes('other_key'), 'scanKeys does not return non-matching keys');
 });
@@ -607,7 +607,7 @@ await withRedis(async (r) => {
   /** scanKeys must respect its limit so a degenerate dataset can't
    * OOM the janitor. Insert 25 keys; ask for 10. */
   for (let i = 0; i < 25; i++) await r.set(`exec_state:k${i}`, 'x');
-  const found = await scanKeys('exec_state:*', 5, 10);
+  const found = await scanKeys(r, 'exec_state:*', 5, 10);
   assert(found.length === 10, `scanKeys honors limit (got ${found.length}, expected 10)`);
 });
 
@@ -688,7 +688,7 @@ await withRedis(async (r) => {
    * around eating Redis memory until their independent TTL fires —
    * which is what an earlier version of this branch did. */
   const id = 'exec_corrupt';
-  await r.set(`exec_state:${id}`, '{not-json', 'EX', EXECUTION_STATE_TTL);
+  await r.set(`exec_state:${hashTag(id)}`, '{not-json', 'EX', EXECUTION_STATE_TTL);
   await r.hset(historyKey(id), 'call_001', JSON.stringify({
     result: 1, is_error: false, received_at: 1,
   }));
@@ -699,7 +699,7 @@ await withRedis(async (r) => {
     `malformed-key reap counted in return value (got ${reaped}, want 1)`,
   );
   assert(
-    (await r.exists(`exec_state:${id}`)) === 0,
+    (await r.exists(`exec_state:${hashTag(id)}`)) === 0,
     'malformed exec_state key reaped',
   );
   assert(

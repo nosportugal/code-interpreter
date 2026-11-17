@@ -246,6 +246,11 @@ redis:
 The CA certificate is mounted from the Secret into every component pod and
 passed to ioredis via `REDIS_CA`. No sidecar is needed.
 
+Remote bridge Cluster upgrades also change the bridge Redis key schema. Stop
+old replicas and follow the [bridge cutover and re-pairing procedure](../../docs/remote-bridge/README.md#redis-cluster-upgrades)
+before upgrading an existing deployment. Startup refuses legacy untagged bridge
+state rather than silently abandoning credentials or workspace fences.
+
 **Sharing one Redis.** Give each release its own `redis.prefix` (rendered as
 `REDIS_PREFIX` into every component). All keys and pub/sub channels are
 namespaced with it, and BullMQ queues use `{<prefix>}` in cluster mode instead

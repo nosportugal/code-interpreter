@@ -26,7 +26,7 @@
 
 import axios from 'axios';
 import { nanoid } from 'nanoid';
-import type { Redis } from 'ioredis';
+import { Cluster, type Redis } from 'ioredis';
 import type * as t from '../types';
 import type { RedisClient } from '../redis-connection';
 import type { LCTool } from '../preamble';
@@ -802,7 +802,11 @@ export async function cleanupStaleExecutions(): Promise<number> {
             offset += CLEANUP_BATCH_SIZE
         ) {
             const batchKeys = keys.slice(offset, offset + CLEANUP_BATCH_SIZE);
-            const values = await redis.mget(...batchKeys);
+            // Each execution has its own slot. These janitor reads are not an
+            // atomic transition; Cluster cannot MGET across execution IDs.
+            const values = redis instanceof Cluster
+                ? await Promise.all(batchKeys.map(key => redis.get(key)))
+                : await redis.mget(...batchKeys);
             for (let i = 0; i < batchKeys.length; i++) {
                 const data = values[i];
                 if (data == null) continue;

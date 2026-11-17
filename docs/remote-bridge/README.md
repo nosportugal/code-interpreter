@@ -67,13 +67,76 @@ Restoring a backup from *before* a revocation can revive trust; reconcile
 revocations after recovery from backup. Use a distinct server ID for each Code
 API deployment and keep it stable when the endpoint changes behind a proxy.
 
+### Redis Cluster upgrades
+
+Set `USE_REDIS_CLUSTER=true` (or a comma-separated `REDIS_HOST` startup-node
+list) for Cluster. TLS, `REDIS_CA`, IPv6 startup nodes and `REDIS_PREFIX` are
+supported. Configure the **same namespace and Cluster settings on every API,
+worker, file server and tool-call/egress service**; a namespace mismatch also
+breaks file authorization. The Helm chart's bundled Redis must be disabled
+when using an external Cluster.
+
+In Cluster mode, bridge keys use `{codeapi:bridge:v1}:...`; durable workspace
+requests use `{codeapi:bridge:v1}:workspace-requests:...`. All bridge
+authorization, revocation, admission, assignment, workspace-fence and durable
+request transitions share that hash slot. This deliberately trades bridge
+sharding for existing atomicity: pairing/credential digests cannot be routed
+with a per-worker tag. `REDIS_PREFIX` remains an independent deployment
+namespace, not a way to override hash tags. Standalone Redis keeps its existing
+untagged bridge keys and behavior. The reintegrated Cluster support retains
+per-execution hash tags for replay/tool-call state and BullMQ's queue hash tags.
+
+**This is a bridge storage-schema change for Cluster, not a rolling upgrade.**
+Older builds used untagged `codeapi:bridge:v1:*` and
+`codeapi:workspace-requests:v1:*` keys. New bridge-enabled API/worker processes
+scan every master within their own `REDIS_PREFIX` at startup and refuse to
+start if either legacy namespace exists. They do not delete, import, silently
+ignore or fall back to those authorization/fencing records. Never run old and
+new bridge replicas against the same namespace during this cutover.
+
+The supported fresh-deployment cutover requires explicit re-pairing:
+
+1. Stop new submissions, drain/settle pending work, and stop all old bridge
+   API replicas, queue workers and machine CLIs. Back up the old Redis namespace.
+   Investigate every incomplete assignment and persistent workspace quarantine
+   before reusing its checkout; re-pairing must not bypass uncertain mutations.
+2. Choose a **new, unused `REDIS_PREFIX`** for the replacement deployment and
+   configure it consistently on all its services. Keep the old namespace and
+   backup intact for audit/reconciliation; do not flush shared Redis, copy only
+   credentials, or selectively erase migration markers to defeat the guard.
+   The replacement intentionally starts with new queues and authorization state.
+3. Deploy this version everywhere, explicitly pair/enroll each machine again,
+   reapply tenant/principal bindings, and verify registration, readiness,
+   execution and cleanup before restoring submissions. Old credentials,
+   browser approvals and recovery enrollments do not authorize the replacement.
+   Do not roll back to the old namespace without reconciling later revocations.
+
+If existing credentials, approvals, assignments or quarantines must remain live,
+an operator-reviewed **offline migration** is required instead of re-pairing.
+There is no automatic migrator in this release. It must preserve every record,
+TTL and fence, change both key namespaces, and rewrite stored key references
+(pairing indexes, lane-fence sets, active-request sorted sets and durable-request
+references in records/assignments/receipts). Copying or renaming keys alone is
+not sufficient. Keep the deployment stopped until all old keys are accounted
+for and the migration is verified.
+
+For local regression coverage, install `redis-server` and the locked service
+dependencies, then run from `service`:
+
+```bash
+USE_REDIS_CLUSTER=true BRIDGE_REDIS_CLUSTER_TEST=1 bun test src/bridge/redis-cluster.integration.test.ts
+```
+
+The test owns three ephemeral loopback masters and exercises actual Cluster Lua
+and hash-slot enforcement; it never connects to configured deployment Redis.
+
 ### File server and Redis pairing
 
 Chat uploads, `import_file`, and generated files all pass through a file
 server. `FILE_SERVER_URL` names it for the API (the egress gateway reads
 `EGRESS_GATEWAY_FILE_SERVER_URL`, which defaults to the same value). **That
 file server must use the same Redis as this Code API**: the same
-`REDIS_HOST`/`REDIS_PORT` and logical database.
+`REDIS_HOST`/`REDIS_PORT`, `REDIS_PREFIX` and logical database.
 
 The two are coupled through Redis and nothing else. Code API registers each
 upload session there before forwarding bytes; the file server reads the session

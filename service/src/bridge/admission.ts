@@ -1,4 +1,5 @@
 import type { RedisClient } from '../redis-connection';
+import { BRIDGE_REDIS_PREFIX } from './redis-keys';
 
 /** Redis time and claim ownership gate every durable admission mutation. */
 export function durableAdmissionFence(
@@ -25,7 +26,7 @@ export class BridgeAdmissionQueue {
   ) {}
 
   private keys(workerId: string): [string, string, string, string] {
-    const prefix = `codeapi:bridge:v1:worker:${encodeURIComponent(workerId)}:admission`;
+    const prefix = `${BRIDGE_REDIS_PREFIX}:worker:${encodeURIComponent(workerId)}:admission`;
     return [
       prefix,
       `${prefix}:deadlines`,

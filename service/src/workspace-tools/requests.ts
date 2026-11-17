@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from 'crypto';
-import type Redis from 'ioredis';
+import { stripClientKeyPrefix, withClientKeyPrefix, type RedisClient } from '../redis-connection';
 import type { WorkspaceToolRequest, WorkspaceToolResult } from '../../../packages/code/src/protocol';
 import type { RedisBridgeStore, RegisteredBridgeWorker, DurableWorkspaceAssignment, CodeBridgeWorkspaceSettlement } from '../bridge/store';
 import { BridgeAdmissionQueue } from '../bridge/admission';
 import { BridgeStoreError, workspaceToolAdmissionId } from '../bridge/store';
+import { WORKSPACE_REQUEST_REDIS_PREFIX as PREFIX } from '../bridge/redis-keys';
 
-const PREFIX = 'codeapi:workspace-requests:v1';
 const ACTIVE = `${PREFIX}:active`;
 const RETENTION_MS = 24 * 60 * 60_000;
 const CLAIM_MS = 10_000;
@@ -83,7 +83,7 @@ function requestKey(owner: WorkspaceRequestOwner, requestId: string, scope: stri
 export class RedisWorkspaceRequests {
   private readonly activeKey: string;
   constructor(
-    private readonly redis: Redis,
+    private readonly redis: RedisClient,
     private readonly bridge: RedisBridgeStore,
     private readonly transition?: (record: StoredWorkspaceRequest) => void,
     private readonly scope = '',
@@ -205,7 +205,8 @@ export class RedisWorkspaceRequests {
 
   async reconcile(): Promise<void> {
     const keys = await deadline(this.redis.zrangebyscore(this.activeKey, '-inf', Date.now(), 'LIMIT', 0, 32));
-    const results = await Promise.allSettled(keys.map(key => deadline(this.advance(key))));
+    const results = await Promise.allSettled(keys.map(key =>
+      deadline(this.advance(stripClientKeyPrefix(this.redis, key)))));
     const failure = results.find(result => result.status === 'rejected');
     if (failure?.status === 'rejected') throw failure.reason;
   }
@@ -221,7 +222,7 @@ export class RedisWorkspaceRequests {
     if (Number(claimed) !== 1) return;
     try {
       let record = await this.read(key);
-      if (record == null) { await this.redis.zrem(this.activeKey, key); return; }
+      if (record == null) { await this.redis.zrem(this.activeKey, withClientKeyPrefix(this.redis, key)); return; }
       if (record.state === 'queued' || record.state === 'admitted') {
         const previousState = record.state;
         try {
@@ -240,7 +241,7 @@ export class RedisWorkspaceRequests {
           if (!(error instanceof BridgeStoreError)) throw error;
           if (error.code === 'WORKER_OFFLINE') {
             // The original worker may reconnect within the remaining admission budget.
-            await this.redis.zadd(this.activeKey, Date.now() + 250, key);
+            await this.redis.zadd(this.activeKey, Date.now() + 250, withClientKeyPrefix(this.redis, key));
             return;
           }
           const current = await this.read(key);
@@ -257,9 +258,9 @@ export class RedisWorkspaceRequests {
       }
       if (record.state !== 'queued' && record.state !== 'admitted') {
         await deadline(this.bridge.finishDurableWorkspaceTool(record));
-        await this.redis.zrem(this.activeKey, key);
+        await this.redis.zrem(this.activeKey, withClientKeyPrefix(this.redis, key));
       } else {
-        await this.redis.zadd(this.activeKey, Date.now() + 250, key);
+        await this.redis.zadd(this.activeKey, Date.now() + 250, withClientKeyPrefix(this.redis, key));
       }
     } finally {
       await this.redis.eval('if redis.call(\'GET\', KEYS[1]) == ARGV[1] then return redis.call(\'DEL\', KEYS[1]) end return 0', 1, claimKey, token);

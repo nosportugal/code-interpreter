@@ -1,5 +1,6 @@
 import type { RedisClient } from '../redis-connection';
 import { durableAdmissionFence } from './admission';
+import { BRIDGE_REDIS_PREFIX } from './redis-keys';
 
 /** Hard bound keeps every atomic scheduling scan constant-sized. */
 export const MAX_WORKSPACE_LEASE_SLOTS = 8;
@@ -22,7 +23,7 @@ export class BridgeWorkspaceSlots {
   constructor(private readonly redis: RedisClient) {}
 
   private keys(workerId: string): string[] {
-    const prefix = `codeapi:bridge:v1:worker:${encodeURIComponent(workerId)}`;
+    const prefix = `${BRIDGE_REDIS_PREFIX}:worker:${encodeURIComponent(workerId)}`;
     return [
       `${prefix}:workspace-slots`,
       `${prefix}:lock`,

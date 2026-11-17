@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 
-import { withClientKeyPrefix, type RedisClient } from '../redis-connection';
+import { stripClientKeyPrefix, withClientKeyPrefix, type RedisClient } from '../redis-connection';
 import type * as t from '../types';
 import type {
   BridgeAssignment,
@@ -29,8 +29,8 @@ import { hasLaneGit, laneGitPolicy } from './lane-git';
 import { BridgeAdmissionQueue, durableAdmissionFence } from './admission';
 import { BridgeWorkspaceSlots } from './slots';
 import type { StoredWorkspaceRequest } from '../workspace-tools/requests';
+import { BRIDGE_REDIS_PREFIX as PREFIX } from './redis-keys';
 
-const PREFIX = 'codeapi:bridge:v1';
 const POLL_INTERVAL_MS = 100;
 const DEFAULT_WORKER_TTL_SECONDS = 60;
 const DEFAULT_REDIS_COMMAND_TIMEOUT_MS = 1_000;
@@ -2646,7 +2646,7 @@ export class RedisBridgeStore {
           this.redisCommandTimeoutMs,
           'Bridge linked worktree fence index read',
         );
-        keys.push(index, ...laneFences);
+        keys.push(index, ...laneFences.map(key => stripClientKeyPrefix(this.redis, key)));
         fenceScope = 'checkout';
       }
     }

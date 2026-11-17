@@ -23,6 +23,8 @@ import { shutdownTelemetry } from './telemetry';
 import { configureExecutionProfileMetrics } from './metrics';
 import { closeHostedAppQueueResources } from './hosted-app/queue';
 import { createStorePairingMonitor, probeFileServerStore } from './store-pairing';
+import { isBridgeEnabled } from './bridge/enabled';
+import { assertBridgeRedisSchema } from './bridge/redis-keys';
 
 const { INSTANCE_ID } = env;
 let isShuttingDown = false;
@@ -140,6 +142,7 @@ export async function startupApiOnly(): Promise<void> {
    * the MINIO_* checkpoint creds) into API pods just to boot. The worker and
    * combined startups own that validation. */
   await validateLifecycleAuthConfig();
+  if (isBridgeEnabled()) await assertBridgeRedisSchema(connection);
   configureProfileMetrics();
   await verifyFileServerStore();
 
@@ -160,6 +163,7 @@ export async function startupWorkerOnly(): Promise<void> {
   validateWorkerHardenedConfig();
   validateExecutionProfilePolicy();
   validateSandboxBackendPolicy();
+  if (isBridgeEnabled()) await assertBridgeRedisSchema(connection);
   configureProfileMetrics();
 
   // Dynamically import workers to start them
@@ -205,6 +209,7 @@ async function gracefulStartup(): Promise<void> {
   validateSandboxBackendPolicy();
   validateApiBridgePolicy();
   await validateLifecycleAuthConfig();
+  if (isBridgeEnabled()) await assertBridgeRedisSchema(connection);
   configureProfileMetrics();
   await verifyFileServerStore();
 

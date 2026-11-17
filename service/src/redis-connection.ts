@@ -185,6 +185,27 @@ export function stripHashTag(raw: string): string {
  * memory usage on a pathological keyspace. */
 export const SCAN_KEYS_DEFAULT_LIMIT = 10_000;
 
+/** Exhaustive, prefix-relative batches for migrations that must not truncate. */
+export async function* scanKeyBatches(
+  client: RedisClient,
+  match: string,
+  count = 100,
+): AsyncGenerator<string[]> {
+  // Cluster.nodes() is empty until startup discovery has completed.
+  if (client instanceof Cluster) await client.ping();
+  const nodes = client instanceof Cluster ? client.nodes('master') : [client];
+  for (const node of nodes) {
+    let cursor = '0';
+    do {
+      const [next, keys] = await node.scan(
+        cursor, 'MATCH', clientScanPattern(client, match), 'COUNT', count,
+      );
+      cursor = next;
+      yield keys.map(key => stripClientKeyPrefix(client, key));
+    } while (cursor !== '0');
+  }
+}
+
 /** Iterate matching Redis keys with SCAN instead of the blocking KEYS
  * command. Stops collecting once `limit` keys have been gathered. In
  * cluster mode, SCAN is issued against every master node individually

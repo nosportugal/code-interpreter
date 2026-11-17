@@ -7,11 +7,12 @@ import {
 } from 'crypto';
 
 import {
-  clientScanPattern,
+  scanKeyBatches,
   stripClientKeyPrefix,
   withClientKeyPrefix,
   type RedisClient,
 } from '../redis-connection';
+import { BRIDGE_REDIS_PREFIX as PREFIX } from './redis-keys';
 
 import {
   BROWSER_ENROLLMENT_MAX_TTL_MS,
@@ -38,7 +39,6 @@ import type {
   BridgeRecoveryStartProofInput,
 } from '../../../packages/code/src/identity';
 
-const PREFIX = 'codeapi:bridge:v1';
 const DEFAULT_PAIRING_TTL_SECONDS = 10 * 60;
 const DEFAULT_CREDENTIAL_TTL_SECONDS = 15 * 60;
 const PROOF_NONCE_TTL_SECONDS = 2 * 60;
@@ -653,7 +653,8 @@ export class RedisBridgePairingStore {
       const approval = JSON.parse(approvalRaw ?? 'null') as unknown;
       pending = (generation ?? '0') === '0' && raw == null && requiredGeneration == null && planned != null &&
         isBrowserEnrollmentApproval(approval) && canonicalBrowserEnrollmentRedemption(approval) === contract &&
-        Date.parse(approval.expiresAt) > Date.now() && fence === 'browser-enrollment' && indexed === `${key}:fence`;
+        Date.parse(approval.expiresAt) > Date.now() && fence === 'browser-enrollment' &&
+        indexed === withClientKeyPrefix(this.redis, `${key}:fence`);
     } catch {
       pending = false;
     }
@@ -1364,18 +1365,8 @@ export class RedisBridgePairingStore {
     renewalTimer.unref?.();
 
     try {
-      let cursor = '0';
-      do {
-        const [nextCursor, rawKeys] = await this.redis.scan(
-          cursor,
-          'MATCH',
-          clientScanPattern(this.redis, `${PREFIX}:pairing:*`),
-          'COUNT',
-          100,
-        );
+      for await (const keys of scanKeyBatches(this.redis, `${PREFIX}:pairing:*`)) {
         if (renewalError != null) throw renewalError;
-        cursor = nextCursor;
-        const keys = rawKeys.map(key => stripClientKeyPrefix(this.redis, key));
         if (keys.length === 0) continue;
         const values = await this.redis.mget(...keys);
         const matching = keys.filter((_key, index) => {
@@ -1389,7 +1380,7 @@ export class RedisBridgePairingStore {
           }
         });
         if (matching.length > 0) await this.redis.del(...matching);
-      } while (cursor !== '0');
+      }
       clearInterval(renewalTimer);
       await renewal;
       if (renewalError != null) throw renewalError;
