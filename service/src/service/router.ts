@@ -39,6 +39,7 @@ import {
 } from '../bridge/selection';
 import logger from '../logger';
 import { resolveQueuedSandboxBackend } from '../execution-profile';
+import { fileObjectMetadataUrl } from './file-object-url';
 
 const { INSTANCE_ID } = env;
 const JOB_COMPLETION_WAIT_TIMEOUT_MS = jobCompletionWaitTimeoutMs(
@@ -943,7 +944,7 @@ router.get('/sessions/:session_id/objects/:fileId', fetchLimiter, sessionAuth, a
 
   try {
     const response = await axios.get(
-      `${env.FILE_SERVER_URL}/sessions/${session_id}/objects/${fileId}/metadata`,
+      fileObjectMetadataUrl(env.FILE_SERVER_URL, session_id, fileId),
       { maxRedirects: 0, headers: internalServiceHeaders({ Accept: 'application/json' }) },
     );
 
