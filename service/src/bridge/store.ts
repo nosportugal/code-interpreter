@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 
-import type Redis from 'ioredis';
+import { withClientKeyPrefix, type RedisClient } from '../redis-connection';
 import type * as t from '../types';
 import type {
   BridgeAssignment,
@@ -522,7 +522,7 @@ async function boundedCommand<T>(
 
 export class RedisBridgeStore {
   constructor(
-    private readonly redis: Redis,
+    private readonly redis: RedisClient,
     private readonly workerTtlSeconds = DEFAULT_WORKER_TTL_SECONDS,
     private readonly redisCommandTimeoutMs = DEFAULT_REDIS_COMMAND_TIMEOUT_MS,
     private readonly maxWorkspaceLeaseSlots = 1,
@@ -749,7 +749,10 @@ export class RedisBridgeStore {
           registration.incarnationId,
           JSON.stringify(registration),
           String(this.workerTtlSeconds),
+          withClientKeyPrefix(
+            this.redis,
           `${PREFIX}:worker:${encodeURIComponent(registration.workerId)}:incarnation:`,
+          ),
           authorizationObject?.pairingGeneration == null
             ? ''
             : String(authorizationObject.pairingGeneration),

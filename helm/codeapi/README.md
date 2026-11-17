@@ -223,13 +223,18 @@ For development only, `LOCAL_MODE=true` bypasses authentication — see
 your Redis (e.g. a managed cache) requires TLS.
 
 **Redis Cluster mode (GCP Memorystore cluster, AWS ElastiCache cluster).** Set
-`redis.cluster.enabled=true` and provide the comma-separated startup nodes in
-`redis.cluster.nodes`. The chart will set `USE_REDIS_CLUSTER=true` and populate
-`REDIS_HOST` with the node list on every component. For TLS with a CA certificate
-(recommended for GCP Memorystore), also set:
+`redis.enabled=false` (so the bundled Redis subchart doesn't take precedence)
+and `redis.cluster.enabled=true`, and provide the comma-separated startup nodes
+in `redis.cluster.nodes`. The chart will set `USE_REDIS_CLUSTER=true` and
+populate `REDIS_HOST` with the node list on every component. For TLS with a CA
+certificate (recommended for GCP Memorystore), also set:
 
 ```yaml
 redis:
+    enabled: false # required — otherwise the bundled subchart is used instead
+    cluster:
+        enabled: true
+        nodes: 'node-1:6379,node-2:6379,node-3:6379'
     tls:
         enabled: true
         caSecretName: my-memorystore-secret # Secret that holds the CA cert
@@ -240,6 +245,16 @@ redis:
 
 The CA certificate is mounted from the Secret into every component pod and
 passed to ioredis via `REDIS_CA`. No sidecar is needed.
+
+**Sharing one Redis.** Give each release its own `redis.prefix` (rendered as
+`REDIS_PREFIX` into every component). All keys and pub/sub channels are
+namespaced with it, and BullMQ queues use `{<prefix>}` in cluster mode instead
+of the default `{codeapi}`, so releases never consume each other's jobs:
+
+```yaml
+redis:
+    prefix: nos-gpt-staging # must not contain '{' or '}'
+```
 
 **Package delivery.** KVM deployments default to
 `workerSandbox.packages.source=image`. Build and publish the baked runner target

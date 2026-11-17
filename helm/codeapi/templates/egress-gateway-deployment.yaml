@@ -75,7 +75,7 @@ spec:
                   name: {{ include "codeapi.fullname" . }}-secrets
                   key: codeapi-internal-service-token
             - name: REDIS_HOST
-              value: {{ include "codeapi.redis.host" . }}
+              value: {{ include "codeapi.redis.host" . | quote }}
             - name: REDIS_PORT
               value: {{ include "codeapi.redis.port" . | quote }}
             - name: REDIS_PASSWORD
@@ -86,6 +86,7 @@ spec:
             - name: USE_REDIS_CLUSTER
               value: {{ include "codeapi.redis.clusterEnabled" . | quote }}
             {{- include "codeapi.redis.tlsEnv" . | nindent 12 }}
+            {{- include "codeapi.redis.prefixEnv" . | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /live
