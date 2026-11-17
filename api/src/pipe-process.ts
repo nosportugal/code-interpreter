@@ -39,8 +39,9 @@ function writable(fd: number): Writable {
 /** Linux child stdio uses pipe2 endpoints, never the runtime's socketpairs.
  * Non-Linux development keeps its native spawn implementation. */
 export function spawnPipeProcess(command: string, args: readonly string[] = [], options: SpawnOptions = {}): ChildProcessWithoutNullStreams {
-  if (process.platform !== 'linux') return spawn(command, args, options) as ChildProcessWithoutNullStreams;
-  const requested = options.stdio ?? ['pipe', 'pipe', 'pipe'];
+  const { shell: _shell, ...spawnOptions } = options;
+  if (process.platform !== 'linux') return spawn(command, args, spawnOptions) as ChildProcessWithoutNullStreams;
+  const requested = spawnOptions.stdio ?? ['pipe', 'pipe', 'pipe'];
   const modes = typeof requested === 'string' ? [requested, requested, requested] : requested;
   if (!Array.isArray(modes) || modes.slice(3).some(mode => typeof mode !== 'number')) throw new Error('unsupported anonymous-pipe process stdio');
   const childFds: number[] = [];
@@ -61,7 +62,7 @@ export function spawnPipeProcess(command: string, args: readonly string[] = [], 
       parentFds.push([index, parentFd]);
       return childFd;
     });
-    child = spawn(command, args, { ...options, stdio });
+    child = spawn(command, args, { ...spawnOptions, stdio });
     for (const [index, fd] of parentFds) streams[index] = index === 0 ? writable(fd) : readable(fd);
     Object.defineProperties(child, {
       stdin: { value: streams[0] }, stdout: { value: streams[1] }, stderr: { value: streams[2] },

@@ -13,6 +13,17 @@ async function collect(stream: Readable): Promise<Buffer> {
 }
 
 describe('anonymous process pipes', () => {
+  test('does not allow shell interpretation from spawn options', async () => {
+    const child = spawnPipeProcess('/bin/echo', ['safe; printf injected >&2'], { shell: true });
+    const output = collect(child.stdout);
+    const errors = collect(child.stderr);
+    child.stdin.end();
+    const [code] = await once(child, 'close');
+    expect(code).toBe(0);
+    expect((await output).toString()).toBe('safe; printf injected >&2\n');
+    expect((await errors).toString()).toBe('');
+  });
+
   test('large concurrent streams preserve backpressure and output before close', async () => {
     const bytes = Buffer.alloc(2 * 1024 * 1024, 'p');
     await Promise.all(Array.from({ length: 8 }, async () => {
