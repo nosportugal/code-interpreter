@@ -58,6 +58,7 @@ import { Jobs } from '../enum';
 import { env, jobCompletionWaitTimeoutMs } from '../config';
 import { resolveQueuedSandboxBackend } from '../execution-profile';
 import { publicExecutionFailure } from '../utils';
+import { decodeContinuationToken } from './programmatic-continuation-token';
 import { observeRequestDisconnect } from '../request-disconnect';
 import {
   normalizeEgressGatewayUrl,
@@ -270,39 +271,6 @@ function classifyContinuationOutcome(statusCode: number): string {
   return 'success_or_pending';
 }
 
-/** Decode + validate a continuation token. Rejects tokens whose issue
- * timestamp is older than the execution-state TTL — without this, the
- * `ts` field was dead data and a client could replay an ancient token
- * against a freshly-reused-execution-id window. */
-function decodeContinuationToken(
-    token: string,
-): { execution_id: string } | null {
-  try {
-        const parsed: unknown = JSON.parse(
-            Buffer.from(token, 'base64').toString('utf-8'),
-        );
-    if (parsed === null || typeof parsed !== 'object') {
-      return null;
-    }
-    const candidate = parsed as { execution_id?: unknown; ts?: unknown };
-        if (
-            typeof candidate.execution_id !== 'string' ||
-            candidate.execution_id.length === 0
-        ) {
-      return null;
-    }
-    if (typeof candidate.ts === 'number' && Number.isFinite(candidate.ts)) {
-      const ageMs = Date.now() - candidate.ts;
-      if (ageMs > EXECUTION_STATE_TTL * 1000) {
-        return null;
-      }
-    }
-    return { execution_id: candidate.execution_id };
-  } catch {
-    return null;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Blocking mode (legacy path)
 // ---------------------------------------------------------------------------
@@ -318,7 +286,7 @@ function waitForExecutionState(
       const response = await retryToolCallServerRequest(
                 () =>
                     axios.get<BlockingPendingState>(
-          `${env.TOOL_CALL_SERVER_URL}/sessions/${id}/pending`,
+          `${env.TOOL_CALL_SERVER_URL}/sessions/${encodeURIComponent(id)}/pending`,
           { maxRedirects: 0, headers: internalServiceHeaders() },
         ),
         'Get pending tool calls',
@@ -1442,7 +1410,10 @@ router.post(
           error: 'tool_results must be a non-empty array; resubmit with at least one result per pending tool call',
         });
       }
-      const decoded = decodeContinuationToken(continuation_token);
+      const decoded = decodeContinuationToken(
+        continuation_token,
+        EXECUTION_STATE_TTL * 1000,
+      );
       if (!decoded) {
                     return res
                         .status(400)
@@ -1540,7 +1511,10 @@ async function handleBlocking(
         continuation_token !== '' &&
         tool_results
     ) {
-    const decoded = decodeContinuationToken(continuation_token);
+    const decoded = decodeContinuationToken(
+      continuation_token,
+      EXECUTION_STATE_TTL * 1000,
+    );
     if (!decoded) {
             return res
                 .status(400)
@@ -1589,7 +1563,7 @@ async function handleBlocking(
       await retryToolCallServerRequest(
                 () =>
                     axios.post(
-                        `${env.TOOL_CALL_SERVER_URL}/sessions/${execution_id}/results`,
+                        `${env.TOOL_CALL_SERVER_URL}/sessions/${encodeURIComponent(execution_id)}/results`,
                         {
           results: tool_results.map(r => ({
             call_id: r.call_id,
