@@ -39,6 +39,7 @@ function writable(fd: number): Writable {
 /** Linux child stdio uses pipe2 endpoints, never the runtime's socketpairs.
  * Non-Linux development keeps its native spawn implementation. */
 export function spawnPipeProcess(command: string, args: readonly string[] = [], options: SpawnOptions = {}): ChildProcessWithoutNullStreams {
+  options = { ...options, shell: false };
   if (process.platform !== 'linux') return spawn(command, args, options) as ChildProcessWithoutNullStreams;
   const requested = options.stdio ?? ['pipe', 'pipe', 'pipe'];
   const modes = typeof requested === 'string' ? [requested, requested, requested] : requested;
