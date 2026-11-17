@@ -48,6 +48,19 @@ describe('anonymous process pipes', () => {
     expect(child.stdin.destroyed).toBe(true);
   }, 5000);
 
+  test.skipIf(process.platform !== 'linux')('does not allow callers to enable shell execution', async () => {
+    const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'pipe-process-'));
+    const marker = path.join(tmp, 'shell-ran');
+    try {
+      const child = spawnPipeProcess(`/bin/echo; touch ${marker}`, [], { shell: true });
+      const error = await new Promise<NodeJS.ErrnoException>(resolve => child.once('error', resolve));
+      expect(error.code).toBe('ENOENT');
+      expect(fs.existsSync(marker)).toBe(false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   test('spawn failures and killed children release every pipe', async () => {
     const ownedPipes = new Set<string>();
     const addon = process.platform === 'linux'
