@@ -85,7 +85,7 @@ npx tsc --noEmit
 ```sh
 cd service
 bun test src/egress-ledger.test.ts src/egress-ledger-reconnect.test.ts src/egress-gateway.test.ts src/file-object-resolver.test.ts src/file-download.test.ts src/file-metadata.test.ts
-npx tsc --noEmit
+npx tsc --noEmit -p tsconfig.esm.json
 ```
 
 Run the code-package tests with Node (its supported test runner), plus launcher and deployment checks in CI. Cache regressions cover fresh-workspace reuse, cross-principal/version separation, denied preflights, pushed-key bypass prevention, coalesced cancellation, changed or oversized responses, and descriptor-safe eviction. Production latency targets must be validated with real regional storage latency and workload sizes; local synthetic results are not a production SLO.
